@@ -37,6 +37,11 @@ class ParagraphVectorCorruption(nn.Module):
         inputs.data.masked_fill_(mask, 0).mul_(1./(1-drop_prob)) #drop_prob to fill data to 0
         return inputs
 
+    def get_para_vector(self, prod_rword_idxs_pvc):
+        pvc_word_emb = self.word_embeddings(prod_rword_idxs_pvc)
+        review_emb = get_vector_mean(pvc_word_emb, prod_rword_idxs_pvc.ne(self.word_pad_idx))
+        return review_emb
+
     def forward(self, review_word_emb, review_word_mask, prod_rword_idxs_pvc, n_negs):
         '''
             prod_rword_idxs_pvc: batch_size (real_batch_size * review_count), review_word_limit
@@ -45,15 +50,16 @@ class ParagraphVectorCorruption(nn.Module):
         '''
         batch_size, pv_window_size, embedding_size = review_word_emb.size()
         pvc_word_emb = self.word_embeddings(prod_rword_idxs_pvc)
-        self.apply_token_dropout(pvc_word_emb, self.corrupt_rate)
         review_emb = get_vector_mean(pvc_word_emb, prod_rword_idxs_pvc.ne(self.word_pad_idx))
+        self.apply_token_dropout(pvc_word_emb, self.corrupt_rate)
+        corr_review_emb = get_vector_mean(pvc_word_emb, prod_rword_idxs_pvc.ne(self.word_pad_idx))
 
         #for each target word, there is k words negative sampling
         #compute the loss of review generating positive and negative words
         neg_sample_idxs = torch.multinomial(self.word_dists, batch_size * pv_window_size * n_negs, replacement=True)
         neg_sample_emb = self.word_embeddings(neg_sample_idxs.view(batch_size, -1))
-        output_pos = torch.bmm(review_word_emb, review_emb.unsqueeze(2)) # batch_size, pv_window_size, 1
-        output_neg = torch.bmm(neg_sample_emb, review_emb.unsqueeze(2)).view(batch_size, pv_window_size, -1)
+        output_pos = torch.bmm(review_word_emb, corr_review_emb.unsqueeze(2)) # batch_size, pv_window_size, 1
+        output_neg = torch.bmm(neg_sample_emb, corr_review_emb.unsqueeze(2)).view(batch_size, pv_window_size, -1)
         scores = torch.cat((output_pos, output_neg), dim=-1) #batch_size, pv_window_size, 1+n_negs
         target = torch.cat((torch.ones(output_pos.size(), device=scores.device),
             torch.zeros(output_neg.size(), device=scores.device)), dim=-1)
@@ -62,30 +68,6 @@ class ParagraphVectorCorruption(nn.Module):
 
         #cuda.longtensor
         #negative sampling according to x^0.75
-        #each word has n_neg corresponding samples
-
-        '''
-        oloss = torch.bmm(review_word_emb, review_emb.unsqueeze(2)).squeeze(-1)
-        nloss = torch.bmm(neg_sample_emb.neg(), review_emb.unsqueeze(2)).squeeze(-1)
-        print("nloss", nloss)
-        nloss = nloss.view(batch_size, pv_window_size, -1)
-        oloss = oloss.sigmoid().log() #batch_size, pv_window_size
-        #unstable computation, nan may occur
-        if float('-inf') in nloss.sigmoid().log():
-            print(nloss)
-        if torch.isnan(nloss).sum() > 0:
-            print(nloss)
-
-        nloss = nloss.sigmoid().log().sum(2)# batch_size, pv_window_size#(n_negs->1)
-        loss = -(nloss + oloss) #* review_word_mask.float()
-        print("nloss", nloss)
-        print("oloss", oloss)
-        loss = get_vector_mean(loss.unsqueeze(-1), review_word_mask)
-        print("loss", loss)
-        #(batch_size, )
-        #loss = get_vector_mean(loss.unsqueeze(-1), review_ids.ne(self.review_pad_idx))
-        '''
-
         return review_emb, loss
 
     def forward_deprecated(self, review_word_emb, review_word_mask, prod_rword_idxs_pvc, rand_prod_rword_idxs, n_negs):

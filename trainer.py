@@ -90,11 +90,11 @@ class Trainer(object):
             pbar = tqdm(dataloader)
             pbar.set_description("[Epoch {}]".format(current_epoch))
             time_flag = time.time()
-            for batch_data in pbar:
-                batch_data = batch_data.to(args.device)
+            for batch_data_arr in pbar:
+                batch_data_arr = [x.to(args.device) for x in batch_data_arr]
                 get_batch_time += time.time() - time_flag
                 time_flag = time.time()
-                step_loss = self.model(batch_data)
+                step_loss = self.model(batch_data_arr)
                 #self.optim.optimizer.zero_grad()
                 self.model.zero_grad()
                 step_loss.backward()
@@ -107,7 +107,7 @@ class Trainer(object):
 
                 # Once in a while, we print statistics.
                 if current_step % args.steps_per_checkpoint == 0:
-                    logger.info("Epoch %d lr = %5.4f loss = %6.2f time %.2f prepare_time %.2f step_time %.2f" %
+                    logger.info("Epoch %d lr = %5.6f loss = %6.2f time %.2f prepare_time %.2f step_time %.2f" %
                             (current_epoch, self.optim.learning_rate, loss, time.time()-start_time, get_batch_time, step_time))#, end=""
 
                     step_time, get_batch_time, loss = 0., 0.,0.

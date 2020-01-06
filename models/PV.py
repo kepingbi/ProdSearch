@@ -29,6 +29,10 @@ class ParagraphVector(nn.Module):
     def embedding_size(self):
         return self._embedding_size
 
+    def get_para_vector(self, review_ids):
+        review_emb = self.review_embeddings(review_ids)
+        return review_emb
+
     def forward(self, review_ids, review_word_emb, review_word_mask, n_negs):
         batch_size, pv_window_size, embedding_size = review_word_emb.size()
         #for each target word, there is k words negative sampling
@@ -59,7 +63,6 @@ class ParagraphVector(nn.Module):
         #(batch_size, )
         #loss = loss.sum() / review_ids.ne(self.review_pad_idx).float().sum()
         '''
-
         return review_emb, loss
 
     def initialize_parameters(self, logger=None):

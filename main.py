@@ -29,7 +29,7 @@ def parse_args():
     parser.add_argument("--lr", default=0.00005, type=float) #0.002
     parser.add_argument("--beta1", default= 0.9, type=float)
     parser.add_argument("--beta2", default=0.999, type=float)
-    parser.add_argument("--decay_method", default='', type=str)
+    parser.add_argument("--decay_method", default='noam', type=str) #warmup learning rate then decay
     parser.add_argument("--warmup_steps", default=100, type=int) #10000
     parser.add_argument("--max_grad_norm", type=float, default=5.0,
                             help="Clip gradients to this norm.")
@@ -37,7 +37,7 @@ def parse_args():
                             help="The rate to subsampling.")
     parser.add_argument("--L2_lambda", type=float, default=0.0,
                             help="The lambda for L2 regularization.")
-    parser.add_argument("--batch_size", type=int, default=64,
+    parser.add_argument("--batch_size", type=int, default=32,
                             help="Batch size to use during training.")
     parser.add_argument("--num_workers", type=int, default=4,
                             help="Number of processes to load batches of data during training.")
@@ -47,7 +47,7 @@ def parse_args():
     parser.add_argument("--log_file", type=str, default="train.log", help="log file name")
     parser.add_argument("--query_encoder_name", type=str, default="fs", choices=["fs","avg"],
             help="Specify network structure parameters. Please read readme.txt for details.")
-    parser.add_argument("--review_encoder_name", type=str, default="fs", choices=["pv", "pvc", "fs", "avg"],
+    parser.add_argument("--review_encoder_name", type=str, default="pvc", choices=["pv", "pvc", "fs", "avg"],
             help="Specify network structure parameters. ")
     parser.add_argument("--embedding_size", type=int, default=128, help="Size of each embedding.")
     parser.add_argument("--ff_size", type=int, default=512, help="size of feedforward layers in transformers.")
@@ -67,11 +67,9 @@ def parse_args():
     parser.add_argument("--max_train_epoch", type=int, default=2,
                             help="Limit on the epochs of training (0: no limit).")
     parser.add_argument("--start_epoch", type=int, default=0,
-                            help="Limit on the epochs of training (0: no limit).")
-    parser.add_argument("--steps_per_checkpoint", type=int, default=400,
+                            help="the epoch where we start training.")
+    parser.add_argument("--steps_per_checkpoint", type=int, default=20,
                             help="How many training steps to do per checkpoint.")
-    parser.add_argument("--seconds_per_checkpoint", type=int, default=3600,
-                            help="How many seconds to wait before storing embeddings.")
     parser.add_argument("--neg_per_pos", type=int, default=5,
                             help="How many negative samples used to pair with postive results.")
     parser.add_argument("--sparse_emb", action='store_true',

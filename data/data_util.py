@@ -64,6 +64,7 @@ class ProdSearchData():
             self.sub_sampling_rate[i] = min(1.0, (np.sqrt(float(self.vocab_distribute[i]) / threshold) + 1) * threshold / float(self.vocab_distribute[i]))
 
         self.sample_count = sum([self.sub_sampling_rate[i] * self.vocab_distribute[i] for i in range(self.vocab_size)])
+        self.sub_sampling_rate = np.asarray(self.sub_sampling_rate)
         print("sample_count", self.sample_count)
 
     def neg_distributes(self, weights, distortion = 0.75):
@@ -87,13 +88,15 @@ class GlobalProdSearchData():
         self.words = self.read_lines("{}/vocab.txt.gz".format(data_path))
         self.vocab_size = len(self.words) + 1
         self.query_words = self.read_words_in_lines("{}/query.txt.gz".format(input_train_dir))
-        self.query_words = util.pad(self.query_words, pad_id=self.vocab_size-1)
+        self.word_pad_idx = self.vocab_size-1
+        self.query_words = util.pad(self.query_words, pad_id=self.word_pad_idx)
 
-        self.review_words = self.read_words_in_lines("{}/review_text.txt.gz".format(data_path))
+        self.review_words = self.read_words_in_lines(
+                "{}/review_text.txt.gz".format(data_path), cutoff=args.review_word_limit)
         self.review_length = [len(x) for x in self.review_words]
-        self.review_words = util.pad(self.review_words, pad_id=self.vocab_size-1, width=args.review_word_limit)
+        #self.review_words = util.pad(self.review_words, pad_id=self.vocab_size-1, width=args.review_word_limit)
         self.review_count = len(self.review_words) + 1
-        self.review_words.append([-1] * args.review_word_limit)
+        self.review_words.append([self.word_pad_idx]) # * args.review_word_limit)
         #so that review_words[-1] = -1, ..., -1
         self.u_r_seq = self.read_arr_from_lines("{}/u_r_seq.txt.gz".format(data_path)) #list of review ids
         self.i_r_seq = self.read_arr_from_lines("{}/p_r_seq.txt.gz".format(data_path)) #list of review ids
@@ -145,11 +148,14 @@ class GlobalProdSearchData():
         return arr
 
     @staticmethod
-    def read_words_in_lines(fname):
+    def read_words_in_lines(fname, cutoff=-1):
         line_arr = []
         with gzip.open(fname, 'rt') as fin:
             for line in fin:
                 words = [int(i) for i in line.strip().split(' ')]
-                line_arr.append(words)
+                if cutoff < 0:
+                    line_arr.append(words)
+                else:
+                    line_arr.append(words[:cutoff])
         return line_arr
 

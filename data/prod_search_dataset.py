@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import Dataset
 import numpy as np
 import random
+import others.util as util
 
 from collections import defaultdict
 
@@ -62,11 +63,11 @@ class ProdSearchDataset(Dataset):
             pos_prod_ridxs = u_prev_review_idxs + i_prev_review_idxs
             pos_prod_ridxs = pos_prod_ridxs[:self.total_review_limit] # or select reviews with the most words
 
-            pos_prod_rword_idxs = [global_data.review_words[x] for x in pos_prod_ridxs]
+            #pos_prod_rword_idxs = [global_data.review_words[x] for x in pos_prod_ridxs]
             neg_prod_idxs = prod_data.neg_sample_products[line_id] #neg_per_pos
             neg_prod_ridxs = []
             neg_seg_idxs = []
-            neg_prod_rword_idxs = []
+            #neg_prod_rword_idxs = []
             for neg_i in neg_prod_idxs:
                 loc_in_neg_i = self.bisect_right(global_data.i_r_seq[neg_i], global_data.review_loc_time, review_time_stamp)
                 if loc_in_neg_i == 0:
@@ -79,19 +80,22 @@ class ProdSearchDataset(Dataset):
                 cur_neg_i_review_idxs = cur_neg_i_review_idxs[:self.total_review_limit]
                 neg_seg_idxs.append(cur_neg_i_masks)
                 neg_prod_ridxs.append(cur_neg_i_review_idxs)
-                neg_prod_rword_idxs.append([global_data.review_words[x] for x in cur_neg_i_review_idxs])
+                #neg_prod_rword_idxs.append([global_data.review_words[x] for x in cur_neg_i_review_idxs])
             if len(neg_prod_ridxs) == 0:
                 #all the neg prod do not have available reviews
                 continue
+            train_data.append([query_word_idxs,
+                pos_prod_ridxs, pos_seg_idxs,
+                neg_prod_ridxs, neg_seg_idxs])
             #neg_per_pos * iprev_review_limit * review_word_limit
             #all the reviews should have a set of words;
             #length is review_word_limit if encoder from bottom to top
             #length is pv_window_size if pv
+            '''
             pos_prod_rword_idxs = np.asarray(pos_prod_rword_idxs)
             #neg_prod_rword_idxs = np.asarray(neg_prod_rword_idxs)
             #print(pos_prod_rword_idxs.shape)#, neg_prod_rword_idxs.shape)
             #neg_k, nr_count, rword_count = neg_prod_rword_idxs.shape
-
             #reshp_neg_prod_rword_idxs = neg_prod_rword_idxs.reshape(-1, rword_count)
             pos_prod_rword_idxs_pvc = None
             neg_prod_rword_idxs_pvc = None
@@ -121,18 +125,6 @@ class ProdSearchDataset(Dataset):
                     if self.review_encoder_name == "pvc":
                         pos_prod_rword_idxs_pvc = pos_prod_rword_idxs.tolist()
                         neg_prod_rword_idxs_pvc = neg_prod_rword_idxs
-                    '''
-                        rand_pos_prod_rword_idxs = self.group_of_pv_corruption_words(
-                                pos_prod_rword_idxs, self.pv_window_size, self.corrupt_rate, pad_id=self.word_pad_idx)
-                        #pos_prod_review_count, pv_window_size * pvc_word_count
-                        rand_neg_prod_rword_idxs = []
-                        for cur_neg_rwords in neg_prod_rword_idxs:
-                            cur_rand_neg_prod_rword_idxs = self.group_of_pv_corruption_words(
-                                    np.asarray(cur_neg_rwords), self.pv_window_size, self.corrupt_rate, pad_id=self.word_pad_idx)
-                            #neg_prod_review_count, pv_window_size * neg_pvc_word_count
-                            rand_neg_prod_rword_idxs.append(cur_rand_neg_prod_rword_idxs)
-                        #rand_neg_prod_rword_idxs = rand_neg_prod_rword_idxs.reshape(neg_k, nr_count, -1) #pv_window_size
-                    '''
                     cur_slide_neg_prword_idxs = None
                     cur_slide_neg_prword_masks = None
                     if self.learn_neg:
@@ -159,12 +151,16 @@ class ProdSearchDataset(Dataset):
                 train_data.append([query_word_idxs, pos_prod_ridxs, pos_seg_idxs, pos_prod_rword_idxs.tolist(), pos_prod_rword_masks.tolist(),
                     neg_prod_ridxs, neg_seg_idxs, neg_prod_rword_idxs, neg_prod_rword_masks,
                     None, None]) #, None, None]) # all for pvc
+
+            '''
+
         return train_data
 
     def get_pv_word_masks(self, prod_rword_idxs, subsampling_rate, pad_id):
         rand_numbers = np.random.random(prod_rword_idxs.shape)
-        subsampling_rate_arr = np.asarray([[subsampling_rate[prod_rword_idxs[i][j]] \
-                for j in range(prod_rword_idxs.shape[1])] for i in range(prod_rword_idxs.shape[0])])
+        #subsampling_rate_arr = np.asarray([[subsampling_rate[prod_rword_idxs[i][j]] \
+        #        for j in range(prod_rword_idxs.shape[1])] for i in range(prod_rword_idxs.shape[0])])
+        subsampling_rate_arr = subsampling_rate[prod_rword_idxs]
         masks = np.logical_and(prod_rword_idxs !=pad_id, rand_numbers < subsampling_rate_arr)
         return masks
 
@@ -177,11 +173,30 @@ class ProdSearchDataset(Dataset):
         #review_count * review_word_limit
         seg_prod_rword_idxs = []
         cur_length = 0
-        #subsampling rate
         while cur_length < prod_rword_idxs.shape[1]: # review_word_limit
-            seg_prod_rword_idxs.append(prod_rword_idxs[:,cur_length:cur_length+pv_window_size].tolist())
+            seg_prod_rword_idxs.append(prod_rword_idxs[:,cur_length:cur_length+pv_window_size]) #).tolist())
             cur_length += pv_window_size
         return seg_prod_rword_idxs
+
+    def slide_padded_matrices_for_pv(self, prod_rword_idxs, pv_window_size, pad_id):
+        '''
+        word_limit = prod_rword_idxs.shape[1]
+        seg_count = word_limit / pv_window_size
+        mod = word_limit % pv_window_size
+        if mod > 0:
+            seg_count += 1
+        new_length = pv_window_size * seg_count
+        prod_rword_idxs = util.pad_3d(
+                prod_rword_idxs.tolist(), pad_id=pad_id, dim=2, width=new_length) #pad words
+        #seg_count = (prod_rword_idxs.shape[1]-1)/pv_window_size + 1
+        '''
+        pad_size = pv_window_size - (prod_rword_idxs.shape[1] % pv_window_size)
+        if pad_size < pv_window_size:
+            prod_rword_idxs = np.pad(prod_rword_idxs, ((0,0),(0,pad_size)),mode='constant', constant_values=pad_id)
+
+        seg_count = int(prod_rword_idxs.shape[1]/pv_window_size)
+        return np.asarray([prod_rword_idxs[:,i*pv_window_size:(i+1)*pv_window_size] for i in range(seg_count)])
+
 
     def group_of_pv_corruption_words(self, prod_rword_idxs, pv_window_size, corrupt_rate, pad_id):
         ''' select random words from reviews with subsampling taken in to account
