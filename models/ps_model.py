@@ -14,6 +14,7 @@ from models.text_encoder import AVGEncoder, FSEncoder
 from models.transformer import TransformerEncoder
 from models.optimizers import Optimizer
 from others.logging import logger
+import others.util as util
 
 def build_optim(args, model, checkpoint):
     """ Build optimizer """
@@ -52,9 +53,11 @@ class ProductRanker(nn.Module):
         super(ProductRanker, self).__init__()
         self.args = args
         self.device = device
-        self.learn_neg = args.learn_neg
+        self.train_review_only = args.train_review_only
         self.embedding_size = args.embedding_size
-        self.word_dists = torch.tensor(word_dists).to(device)
+        self.word_dists = None
+        if word_dists is not None:
+            self.word_dists = torch.tensor(word_dists).to(device)
         self.word_pad_idx = vocab_size-1
         self.seg_pad_idx = 3
         self.review_pad_idx = review_count-1
@@ -86,12 +89,98 @@ class ProductRanker(nn.Module):
         #Q, previous purchases of u, current available reviews for i, padding value
         #self.logsoftmax = torch.nn.LogSoftmax(dim = -1)
         self.bce_logits_loss = torch.nn.BCEWithLogitsLoss(reduction='none')#by default it's mean
+        self.review_embeddings = None
 
         self.initialize_parameters(logger) #logger
         self.to(device)
 
     def load_cp(self, pt, strict=True):
         self.load_state_dict(pt['model'], strict=strict)
+
+    def clear_review_embbeddings(self):
+        del self.review_embeddings
+        torch.cuda.empty_cache()
+
+    def get_review_embeddings(self, global_data, batch_size=128):
+        if self.review_encoder_name == "pv":
+            self.review_embeddings = self.review_encoder.review_embeddings.weight
+        else:
+            padded_review_words = util.pad(global_data.review_words, pad_id = self.word_pad_idx)
+            padded_review_words = torch.tensor(padded_review_words, device=self.device)
+            review_count = self.review_pad_idx
+            seg_count = int((review_count - 1) / batch_size) + 1
+            self.review_embeddings = torch.zeros(review_count+1, self.embedding_size, device=self.device)
+            #The last one is always 0
+            for i in range(seg_count):
+                slice_reviews = padded_review_words[i*batch_size:(i+1)*batch_size]
+                if self.review_encoder_name == "pvc":
+                    slice_review_emb = self.review_encoder.get_para_vector(slice_reviews)
+                else: #fs or avg
+                    slice_review_emb = self.review_encoder(slice_reviews, slice_reviews.ne(self.word_pad_idx))
+                self.review_embeddings[i*batch_size:(i+1)*batch_size] = slice_review_emb
+
+    def test(self, batch_data):
+        query_word_idxs = batch_data.query_word_idxs
+        candi_prod_ridxs = batch_data.candi_prod_ridxs
+        candi_seg_idxs = batch_data.candi_seg_idxs
+        query_word_emb = self.word_embeddings(query_word_idxs)
+        query_emb = self.query_encoder(query_word_emb, query_word_idxs.ne(self.word_pad_idx))
+        batch_size, candi_k, candi_rcount = candi_prod_ridxs.size()
+        candi_review_emb = self.review_embeddings[candi_prod_ridxs]
+
+        #concat query_emb with pos_review_emb and candi_review_emb
+        query_mask = torch.ones(batch_size, 1, dtype=torch.uint8, device=query_word_idxs.device)
+        candi_prod_ridx_mask = candi_prod_ridxs.ne(self.review_pad_idx)
+        candi_review_mask = torch.cat([query_mask.unsqueeze(1).expand(-1,candi_k,-1), candi_prod_ridx_mask], dim=2)
+        #batch_size, 1, embedding_size
+        candi_sequence_emb = torch.cat(
+                (query_emb.unsqueeze(1).expand(-1, candi_k, -1).unsqueeze(2), candi_review_emb), dim=2)
+        #batch_size, candi_k, max_review_count+1, embedding_size
+        candi_seg_emb = self.seg_embeddings(candi_seg_idxs) #batch_size, candi_k, max_review_count+1, embedding_size
+        candi_sequence_emb += candi_seg_emb
+
+        candi_scores = self.transformer_encoder(
+                candi_sequence_emb.view(batch_size*candi_k, candi_rcount+1, -1),
+                candi_review_mask.view(batch_size*candi_k, candi_rcount+1))
+        candi_scores = candi_scores.view(batch_size, candi_k)
+        return candi_scores
+
+
+    def test_deprecated(self, batch_data):
+        query_word_idxs = batch_data.query_word_idxs
+        candi_prod_ridxs = batch_data.candi_prod_ridxs
+        candi_seg_idxs = batch_data.candi_seg_idxs
+        candi_prod_rword_idxs = batch_data.candi_prod_rword_idxs
+        query_word_emb = self.word_embeddings(query_word_idxs)
+        query_emb = self.query_encoder(query_word_emb, query_word_idxs.ne(self.word_pad_idx))
+        batch_size, candi_k, candi_rcount, candi_rword_limit = candi_prod_rword_idxs.size()
+        candi_prod_rword_idxs = candi_prod_rword_idxs.view(-1, candi_rword_limit)
+        if "pv" == self.review_encoder_name:
+            candi_review_emb = self.review_encoder.get_para_vector(candi_prod_ridxs)
+        elif "pvc" == self.review_encoder_name:
+            candi_review_emb = self.review_encoder.get_para_vector(candi_prod_rword_idxs)
+        else:
+            candi_rword_emb = self.word_embeddings(candi_prod_rword_idxs)
+            candi_prod_rword_masks = candi_prod_rword_idxs.ne(self.word_pad_idx)
+            candi_review_emb = self.review_encoder(candi_rword_emb, candi_prod_rword_masks)
+        candi_review_emb = candi_review_emb.view(batch_size, candi_k, candi_rcount, -1)
+
+        #concat query_emb with pos_review_emb and candi_review_emb
+        query_mask = torch.ones(batch_size, 1, dtype=torch.uint8, device=query_word_idxs.device)
+        candi_prod_ridx_mask = candi_prod_ridxs.ne(self.review_pad_idx)
+        candi_review_mask = torch.cat([query_mask.unsqueeze(1).expand(-1,candi_k,-1), candi_prod_ridx_mask], dim=2)
+        #batch_size, 1, embedding_size
+        candi_sequence_emb = torch.cat(
+                (query_emb.unsqueeze(1).expand(-1, candi_k, -1).unsqueeze(2), candi_review_emb), dim=2)
+        #batch_size, candi_k, max_review_count+1, embedding_size
+        candi_seg_emb = self.seg_embeddings(candi_seg_idxs) #batch_size, candi_k, max_review_count+1, embedding_size
+        candi_sequence_emb += candi_seg_emb
+
+        candi_scores = self.transformer_encoder(
+                candi_sequence_emb.view(batch_size*candi_k, candi_rcount+1, -1),
+                candi_review_mask.view(batch_size*candi_k, candi_rcount+1))
+        candi_scores = candi_scores.view(batch_size, candi_k)
+        return candi_scores
 
     def forward(self, batch_data_arr):
         loss = []

@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 import others.util as util
 import numpy as np
+from data.batch_data import ProdSearchTrainBatch, ProdSearchTestBatch
 
 
 class ProdSearchDataLoader(DataLoader):
@@ -19,76 +20,37 @@ class ProdSearchDataLoader(DataLoader):
         self.seg_pad_idx = self.dataset.seg_pad_idx
         self.global_data = self.dataset.global_data
         self.prod_data = self.dataset.prod_data
+        self.shuffle_review_words = self.dataset.shuffle_review_words
 
-    class ProdSearchBatch(object):
-        def __init__(self, query_word_idxs, pos_prod_ridxs, pos_seg_idxs,
-                        pos_prod_rword_idxs, pos_prod_rword_masks,
-                        neg_prod_ridxs, neg_seg_idxs, neg_prod_rword_idxs=None,
-                        neg_prod_rword_masks=None,
-                        pos_prod_rword_idxs_pvc=None,
-                        neg_prod_rword_idxs_pvc=None,
-                        to_tensor=True): #"cpu" or "cuda"
-            self.query_word_idxs = query_word_idxs
-            self.pos_prod_ridxs = pos_prod_ridxs
-            self.pos_seg_idxs = pos_seg_idxs
-            self.pos_prod_rword_idxs = pos_prod_rword_idxs
-            self.pos_prod_rword_masks = pos_prod_rword_masks
-            self.neg_prod_ridxs = neg_prod_ridxs
-            self.neg_seg_idxs = neg_seg_idxs
-            self.neg_prod_rword_idxs = neg_prod_rword_idxs
-            self.neg_prod_rword_masks = neg_prod_rword_masks
-            #for pvc
-            self.neg_prod_rword_idxs_pvc = neg_prod_rword_idxs_pvc
-            self.pos_prod_rword_idxs_pvc = pos_prod_rword_idxs_pvc
-            if to_tensor:
-                self.to_tensor()
 
-        def to_tensor(self):
-            self.query_word_idxs = torch.tensor(self.query_word_idxs)
-            self.pos_prod_ridxs = torch.tensor(self.pos_prod_ridxs)
-            self.pos_seg_idxs = torch.tensor(self.pos_seg_idxs)
-            self.pos_prod_rword_idxs = torch.tensor(self.pos_prod_rword_idxs)
-            self.neg_prod_ridxs = torch.tensor(self.neg_prod_ridxs)
-            self.neg_seg_idxs = torch.tensor(self.neg_seg_idxs)
-            self.pos_prod_rword_masks = torch.ByteTensor(self.pos_prod_rword_masks)
-            if self.neg_prod_rword_idxs is not None:
-                self.neg_prod_rword_idxs = torch.tensor(self.neg_prod_rword_idxs)
-            if self.neg_prod_rword_masks is not None:
-                self.neg_prod_rword_masks = torch.ByteTensor(self.neg_prod_rword_masks)
-            #for pvc
-            if self.neg_prod_rword_idxs_pvc is not None:
-                    self.neg_prod_rword_idxs_pvc = torch.tensor(self.neg_prod_rword_idxs_pvc)
-            if self.pos_prod_rword_idxs_pvc is not None:
-                    self.pos_prod_rword_idxs_pvc = torch.tensor(self.pos_prod_rword_idxs_pvc)
+    def _collate_fn(self, batch):
+        if self.prod_data.set_name == 'train':
+            return self.get_train_batch(batch)
+        else: #validation or test
+            return self.get_test_batch(batch)
 
-        def to(self, device):
-            if device == "cpu":
-                return self
-            else:
-                query_word_idxs = self.query_word_idxs.to(device)
-                pos_prod_ridxs = self.pos_prod_ridxs.to(device)
-                pos_seg_idxs = self.pos_seg_idxs.to(device)
-                pos_prod_rword_idxs = self.pos_prod_rword_idxs.to(device)
-                pos_prod_rword_masks = self.pos_prod_rword_masks.to(device)
-                neg_prod_ridxs = self.neg_prod_ridxs.to(device)
-                neg_seg_idxs = self.neg_seg_idxs.to(device)
-                neg_prod_rword_idxs = None if self.neg_prod_rword_idxs is None \
-                        else self.neg_prod_rword_idxs.to(device)
-                neg_prod_rword_masks = None if self.neg_prod_rword_masks is None \
-                        else self.neg_prod_rword_masks.to(device)
-                #for pvc
-                neg_prod_rword_idxs_pvc = None if self.neg_prod_rword_idxs_pvc is None \
-                        else self.neg_prod_rword_idxs_pvc.to(device)
-                pos_prod_rword_idxs_pvc = None if self.pos_prod_rword_idxs_pvc is None \
-                        else self.pos_prod_rword_idxs_pvc.to(device)
-                return self.__class__(
-                        query_word_idxs, pos_prod_ridxs, pos_seg_idxs,
-                        pos_prod_rword_idxs, pos_prod_rword_masks,
-                        neg_prod_ridxs, neg_seg_idxs, neg_prod_rword_idxs,
-                        neg_prod_rword_masks,
-                        pos_prod_rword_idxs_pvc,
-                        neg_prod_rword_idxs_pvc, to_tensor=False)
+    def get_test_batch(self, batch):
+        query_idxs = [entry[0] for entry in batch]
+        query_word_idxs = [self.global_data.query_words[x] for x in query_idxs]
+        user_idxs = [entry[1] for entry in batch]
+        target_prod_idxs = [entry[2] for entry in batch]
+        candi_prod_idxs = [entry[3] for entry in batch]
+        candi_prod_ridxs = [entry[4] for entry in batch]
+        candi_seg_idxs = [entry[5] for entry in batch]
+        candi_prod_idxs = util.pad(candi_prod_idxs, pad_id = -1) #pad reviews
+        candi_prod_ridxs = util.pad_3d(candi_prod_ridxs, pad_id = self.review_pad_idx, dim=1) #pad candi products
+        candi_prod_ridxs = util.pad_3d(candi_prod_ridxs, pad_id = self.review_pad_idx, dim=2) #pad reviews of each candi
+        candi_seg_idxs = util.pad_3d(candi_seg_idxs, pad_id = self.seg_pad_idx, dim=1)
+        candi_seg_idxs = util.pad_3d(candi_seg_idxs, pad_id = self.seg_pad_idx, dim=2)
+        candi_prod_ridxs = np.asarray(candi_prod_ridxs)
+        batch_size, candi_k, nr_count = candi_prod_ridxs.shape
+        #candi_prod_rword_idxs = [self.global_data.review_words[x] for x in candi_prod_ridxs.reshape(-1)]
+        #candi_prod_rword_idxs = util.pad(candi_prod_rword_idxs, pad_id = self.word_pad_idx)
+        #candi_prod_rword_idxs = np.asarray(candi_prod_rword_idxs).reshape(batch_size, candi_k, nr_count, -1)
 
+        batch = ProdSearchTestBatch(query_idxs, user_idxs, target_prod_idxs, candi_prod_idxs,
+                query_word_idxs, candi_prod_ridxs, candi_seg_idxs)
+        return batch
 
     '''
     u, Q, i (positive, negative)
@@ -102,8 +64,9 @@ class ProdSearchDataLoader(DataLoader):
     batch_size, review_count (u+i), max_word_count_per_review
     batch_size, neg_k, review_count (u+i), max_word_count_per_review
     '''
-    def _collate_fn(self, batch):
-        query_word_idxs = [entry[0] for entry in batch]
+    def get_train_batch(self, batch):
+        query_idxs = [entry[0] for entry in batch]
+        query_word_idxs = [self.global_data.query_words[x] for x in query_idxs]
         pos_prod_ridxs = [entry[1] for entry in batch]
         pos_seg_idxs = [entry[2] for entry in batch]
         #batch_size, review_count, word_limit
@@ -134,6 +97,8 @@ class ProdSearchDataLoader(DataLoader):
             neg_prod_rword_idxs_pvc = neg_prod_rword_idxs
             batch_size, pos_rcount, word_limit = pos_prod_rword_idxs.shape
             pv_window_size = self.dataset.pv_window_size
+            if self.shuffle_review_words:
+                self.dataset.shuffle_words_in_reviews(pos_prod_rword_idxs)
             slide_pos_prod_rword_idxs = self.dataset.slide_padded_matrices_for_pv(
                     pos_prod_rword_idxs.reshape(-1, word_limit),
                     pv_window_size, self.word_pad_idx)
@@ -158,7 +123,7 @@ class ProdSearchDataLoader(DataLoader):
             slide_pos_prod_rword_masks = slide_pos_prod_rword_masks.reshape(seg_count, batch_size, pos_rcount, -1)
             query_word_idxs, pos_prod_ridxs, pos_seg_idxs, neg_prod_ridxs, neg_seg_idxs \
                     = map(np.asarray, [query_word_idxs, pos_prod_ridxs, pos_seg_idxs, neg_prod_ridxs, neg_seg_idxs])
-            batch = [self.ProdSearchBatch(query_word_idxs[batch_indices[i]],
+            batch = [ProdSearchTrainBatch(query_word_idxs[batch_indices[i]],
                 pos_prod_ridxs[batch_indices[i]], pos_seg_idxs[batch_indices[i]],
                 slide_pos_prod_rword_idxs[i], slide_pos_prod_rword_masks[i],
                 neg_prod_ridxs[batch_indices[i]], neg_seg_idxs[batch_indices[i]],
@@ -167,7 +132,7 @@ class ProdSearchDataLoader(DataLoader):
         else:
             neg_prod_rword_masks = self.dataset.get_pv_word_masks(
                     neg_prod_rword_idxs, self.prod_data.sub_sampling_rate, pad_id=self.word_pad_idx)
-            batch = [self.ProdSearchBatch(query_word_idxs, pos_prod_ridxs, pos_seg_idxs,
+            batch = [ProdSearchTrainBatch(query_word_idxs, pos_prod_ridxs, pos_seg_idxs,
                     pos_prod_rword_idxs, pos_prod_rword_masks,
                     neg_prod_ridxs, neg_seg_idxs,
                     neg_prod_rword_idxs = neg_prod_rword_idxs,

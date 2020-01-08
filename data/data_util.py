@@ -6,50 +6,68 @@ import others.util as util
 import gzip
 
 class ProdSearchData():
-    def __init__(self, args, vocab_size, input_train_dir, set_name, product_size=None):
+    def __init__(self, args, input_train_dir, set_name,
+            vocab_size, review_count,
+            user_size, product_size):
         self.args = args
         self.neg_per_pos = args.neg_per_pos
         self.set_name = set_name
+        self.review_count = review_count
         self.product_size = product_size
+        self.user_size = user_size
         self.vocab_size = vocab_size
-        self.vocab_distribute, self.review_info = self.read_reviews("{}/{}.txt.gz".format(input_train_dir, set_name))
-        self.vocab_distribute = self.vocab_distribute.tolist()
         self.sub_sampling_rate = None
         self.neg_sample_products = None
         self.word_dists = None
 
         if set_name == "train":
+            self.vocab_distribute = self.read_reviews("{}/{}.txt.gz".format(input_train_dir, set_name))
+            self.vocab_distribute = self.vocab_distribute.tolist()
             self.sub_sampling(args.subsampling_rate)
             self.word_dists = self.neg_distributes(self.vocab_distribute)
-            self.train_review_size = len(self.review_info)
 
         #self.product_query_idx = GlobalProdSearchData.read_arr_from_lines("{}/{}_query_idx.txt.gz".format(input_train_dir, set_name))
-        self.review_ids, self.review_query_idx = self.read_review_id("{}/{}_id.txt.gz".format(input_train_dir, set_name))
+        self.review_info, self.review_query_idx = self.read_review_id("{}/{}_id.txt.gz".format(input_train_dir, set_name))
+        self.set_review_size = len(self.review_info)
+        if args.train_review_only and set_name != "train":
+            #u:reviews i:reviews
+            self.train_review_info, _ = self.read_review_id("{}/train_id.txt.gz".format(input_train_dir))
+            self.u_reviews, self.p_reviews = self.get_u_i_reviews(user_size, product_size, self.train_review_info)
+
+
+    def get_u_i_reviews(self, user_size, product_size, review_info):
+        u_reviews = [[] for i in range(self.user_size)]
+        p_reviews = [[] for i in range(self.product_size)]
+        for u_idx, p_idx, r_idx in review_info:
+            u_reviews[u_idx].append(r_idx)
+            p_reviews[p_idx].append(r_idx)
+        return u_reviews, p_reviews
 
     def initialize_epoch(self):
-        self.neg_sample_products = np.random.randint(0, self.product_size, size = (self.train_review_size, self.neg_per_pos))
+        self.neg_sample_products = np.random.randint(0, self.product_size, size = (self.set_review_size, self.neg_per_pos))
 
     def read_review_id(self, fname):
-        review_ids = []
         query_ids = []
-        with gzip.open(fname, 'rt') as fin:
-            for line in fin:
-                arr = line.strip().split('\t')
-                review_ids.append(int(arr[-2].split('_')[-1]))
-                query_ids.append(int(arr[-1]))
-        return review_ids, query_ids
-
-    def read_reviews(self, fname):
-        vocab_distribute = np.zeros(self.vocab_size)
         review_info = []
         with gzip.open(fname, 'rt') as fin:
             for line in fin:
                 arr = line.strip().split('\t')
-                review_info.append((int(arr[0]), int(arr[1]))) # (user_idx, product_idx)
+                review_info.append((int(arr[0]), int(arr[1]), int(arr[-2].split('_')[-1])))#(user_idx, product_idx)
+                query_ids.append(int(arr[-1]))
+        return review_info, query_ids
+
+    def read_reviews(self, fname):
+        vocab_distribute = np.zeros(self.vocab_size)
+        #review_info = []
+        with gzip.open(fname, 'rt') as fin:
+            for line in fin:
+                arr = line.strip().split('\t')
+                #review_info.append((int(arr[0]), int(arr[1]))) # (user_idx, product_idx)
                 review_text = [int(i) for i in arr[2].split(' ')]
                 for idx in review_text:
                     vocab_distribute[idx] += 1
-        return vocab_distribute, review_info
+        #return vocab_distribute, review_info
+        return vocab_distribute
     def sub_sampling(self, subsample_threshold):
         self.sub_sampling_rate = [1.0 for _ in range(self.vocab_size)]
         if subsample_threshold == 0.0:
