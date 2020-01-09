@@ -18,6 +18,8 @@ for each review, collect random words in reviews or words in a sliding window in
 
 class ProdSearchDataset(Dataset):
     def __init__(self, args, global_data, prod_data):
+        self.args = args
+        self.valid_candi_size = args.valid_candi_size
         self.word_pad_idx = global_data.vocab_size - 1
         self.review_pad_idx = global_data.review_count - 1
         self.seg_pad_idx = 3 # 0, 1, 2
@@ -25,7 +27,6 @@ class ProdSearchDataset(Dataset):
         self.review_encoder_name = args.review_encoder_name
         self.pv_window_size = args.pv_window_size
         self.corrupt_rate = args.corrupt_rate
-        self.max_pvc_word_count = args.max_pvc_word_count
         self.train_review_only = args.train_review_only
         self.uprev_review_limit = args.uprev_review_limit
         self.iprev_review_limit = args.iprev_review_limit #can be a really large number, can random select
@@ -43,7 +44,7 @@ class ProdSearchDataset(Dataset):
         test_data = []
         uq_set = set()
         for line_id, review in enumerate(prod_data.review_info):
-            if (line_id+1) % 500 == 0:
+            if (line_id+1) % 1000 == 0:
                 progress = (line_id+1.) / len(prod_data.review_info) * 100
                 print("{}% data processed".format(progress))
             user_idx, prod_idx, review_idx = review
@@ -54,7 +55,15 @@ class ProdSearchDataset(Dataset):
 
             #candidate item list according to user_idx and query_idx, or by default all the items
             #candidate_items = list(range(global_data.product_size))[:1000]
-            candidate_items = list(range(global_data.product_size))
+
+            if self.prod_data.set_name == "valid" and self.valid_candi_size > 1:
+                candidate_items = np.random.randint(0, global_data.product_size,
+                        size=self.valid_candi_size-1).tolist()
+                candidate_items.append(prod_idx)
+                random.shuffle(candidate_items)
+            else:
+                candidate_items = list(range(global_data.product_size))
+
             #review_idx = prod_data.review_ids[line_id]
             if self.train_review_only:
                 u_prev_review_idxs = prod_data.u_reviews[user_idx][:self.uprev_review_limit]
@@ -92,7 +101,7 @@ class ProdSearchDataset(Dataset):
         #words of pos reviews; words of neg reviews, all if encoder is not pv
         train_data = []
         for line_id, review in enumerate(prod_data.review_info):
-            if (line_id+1) % 500 == 0:
+            if (line_id+1) % 20000 == 0:
                 progress = (line_id+1.) / len(prod_data.review_info) * 100
                 print("{}% data processed".format(progress))
             user_idx, prod_idx, review_idx = review

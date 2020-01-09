@@ -4,11 +4,14 @@ main entry of the script, train, validate and test
 import torch
 import argparse
 import random
+import glob
+import os
 
 from others.logging import logger, init_logger
 from models.ps_model import ProductRanker, build_optim
 from data.data_util import GlobalProdSearchData, ProdSearchData
 from trainer import Trainer
+from data.prod_search_dataset import ProdSearchDataset
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -24,6 +27,7 @@ def parse_args():
     parser.add_argument('--seed', default=666, type=int)
     parser.add_argument("--train_from", default='')
     parser.add_argument("--test_from", default='')
+    parser.add_argument("--rankfname", default="test.best_model.ranklist")
     parser.add_argument("--dropout", default=0.1, type=float)
     parser.add_argument("--optim", type=str, default="adam", help="sgd or adam")
     parser.add_argument("--lr", default=0.002, type=float) #0.002
@@ -41,6 +45,8 @@ def parse_args():
                             help="Batch size to use during training.")
     parser.add_argument("--valid_batch_size", type=int, default=16,
                             help="Batch size for validation to use during training.")
+    parser.add_argument("--valid_candi_size", type=int, default=1000, #
+                            help="Random products used for validation. When it is 0 or less, all the products are used.")
     parser.add_argument("--candi_batch_size", type=int, default=1000,
                             help="Batch size for validation to use during training.")
     parser.add_argument("--num_workers", type=int, default=4,
@@ -65,10 +71,11 @@ def parse_args():
                             help="the number of item's previous reviews used.")
     parser.add_argument("--pv_window_size", type=int, default=5, help="Size of context window.")
     parser.add_argument("--corrupt_rate", type=float, default=0.9, help="the corruption rate that is used to represent the paragraph in the corruption module.")
-    parser.add_argument("--max_pvc_word_count", type=int, default=50, help="number of words that represent the paragraph in the corruption module.")
     parser.add_argument("--shuffle_review_words", type=str2bool, nargs='?',const=True,default=True,help="shuffle review words before collecting sliding words.")
     parser.add_argument("--train_review_only", type=str2bool, nargs='?',const=True,default=True,help="whether the representation of negative products need to be learned at each step.")
     parser.add_argument("--max_train_epoch", type=int, default=5,
+                            help="Limit on the epochs of training (0: no limit).")
+    parser.add_argument("--train_pv_epoch", type=int, default=1,
                             help="Limit on the epochs of training (0: no limit).")
     parser.add_argument("--start_epoch", type=int, default=0,
                             help="the epoch where we start training.")
@@ -82,10 +89,7 @@ def parse_args():
                             help="scale the grad of word and av embeddings.")
     parser.add_argument("-nw", "--weight_distort", action='store_true',
                             help="Set to True to use 0.75 power to redistribute for neg sampling .")
-    parser.add_argument("--decode", action='store_true',
-                            help="Set to True for testing.")
-    parser.add_argument("--test_mode", type=str, default="product_scores",
-            help="Test modes: product_scores -> output ranking results and ranking scores; (default is product_scores)")
+    parser.add_argument("--mode", type=str, default="train", choices=["train", "valid", "test"])
     parser.add_argument("--rank_cutoff", type=int, default=100,
                             help="Rank cutoff for output ranklists.")
     parser.add_argument('--device', default='cuda', choices=['cpu', 'cuda'], help="use CUDA or cpu")
@@ -139,8 +143,33 @@ def train(args):
     del trainer
     torch.cuda.empty_cache()
     trainer = Trainer(args, best_model, None)
-    trainer.test(args, global_data, test_prod_data)
+    trainer.test(args, global_data, test_prod_data, args.rankfname)
 
+def validate(args):
+    init_logger(args.log_file)
+    cp_files = sorted(glob.glob(os.path.join(args.save_dir, 'model_epoch_*.ckpt')))
+    global_data = GlobalProdSearchData(args, args.data_dir, args.input_train_dir)
+    valid_prod_data = ProdSearchData(args, args.input_train_dir, "valid",
+            global_data.vocab_size, global_data.review_count,
+            global_data.user_size, global_data.product_size)
+    valid_dataset = ProdSearchDataset(args, global_data, valid_prod_data)
+    best_mrr, best_model = 0, None
+    for cur_model_file in cp_files:
+        logger.info("Loading {}".format(cur_model_file))
+        cur_model, _ = create_model(args, valid_prod_data, cur_model_file)
+        trainer = Trainer(args, cur_model, None)
+        mrr = trainer.validate(args, global_data, valid_dataset)
+        if mrr > best_mrr:
+            best_mrr = mrr
+            best_model = cur_model_file
+
+    test_prod_data = ProdSearchData(args, args.input_train_dir, "test",
+            global_data.vocab_size, global_data.review_count,
+            global_data.user_size, global_data.product_size)
+
+    best_model, _ = create_model(args, test_prod_data, best_model)
+    trainer = Trainer(args, best_model, None)
+    trainer.test(args, global_data, test_prod_data, args.rankfname)
 
 def get_product_scores(args):
     init_logger(args.log_file)
@@ -150,12 +179,14 @@ def get_product_scores(args):
             global_data.user_size, global_data.product_size)
     best_model, _ = create_model(args, test_prod_data, args.test_from)
     trainer = Trainer(args, best_model, None)
-    trainer.test(args, global_data, test_prod_data)
+    trainer.test(args, global_data, test_prod_data, args.rankfname)
 
 def main(args):
-    if args.decode:
-            get_product_scores(args)
-    else:
+    if args.mode == "train":
         train(args)
+    elif args.mode == "valid":
+        validate(args)
+    else:
+        get_product_scores(args)
 if __name__ == '__main__':
     main(parse_args())

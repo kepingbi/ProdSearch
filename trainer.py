@@ -17,28 +17,7 @@ def _tally_parameters(model):
 class Trainer(object):
     """
     Class that controls the training process.
-
-    Args:
-            model(:py:class:`onmt.models.model.NMTModel`): translation model
-                to train
-            train_loss(:obj:`onmt.utils.loss.LossComputeBase`):
-               training loss computation
-            valid_loss(:obj:`onmt.utils.loss.LossComputeBase`):
-               training loss computation
-            optim(:obj:`onmt.utils.optimizers.Optimizer`):
-               the optimizer responsible for update
-            trunc_size(int): length of truncated back propagation through time
-            shard_size(int): compute loss in shards of this size for efficiency
-            data_type(string): type of the source input: [text|img|audio]
-            norm_method(string): normalization methods: [sents|tokens]
-            grad_accum_count(int): accumulate gradients this many times.
-            report_manager(:obj:`onmt.utils.ReportMgrBase`):
-                the object that creates reports, or None
-            model_saver(:obj:`onmt.models.ModelSaverBase`): the saver is
-                used to save a checkpoint.
-                Thus nothing will be saved if this parameter is None
     """
-
     def __init__(self,  args, model,  optim):
         # Basic attributes.
         self.args = args
@@ -73,8 +52,10 @@ class Trainer(object):
             logger.info("Initialize epoch:%d" % current_epoch)
             train_prod_data.initialize_epoch()
             dataset = data.ProdSearchDataset(args, global_data, train_prod_data)
+            prepare_pv = current_epoch < args.train_pv_epoch+1
+            print(prepare_pv)
             dataloader = data.ProdSearchDataLoader(
-                    dataset, batch_size=args.batch_size,
+                    dataset, prepare_pv=prepare_pv, batch_size=args.batch_size,
                     shuffle=True, num_workers=args.num_workers)
             pbar = tqdm(dataloader)
             pbar.set_description("[Epoch {}]".format(current_epoch))
@@ -83,13 +64,13 @@ class Trainer(object):
                 batch_data_arr = [x.to(args.device) for x in batch_data_arr]
                 get_batch_time += time.time() - time_flag
                 time_flag = time.time()
-                step_loss = self.model(batch_data_arr)
+                step_loss = self.model(batch_data_arr, train_pv=prepare_pv)
                 #self.optim.optimizer.zero_grad()
                 self.model.zero_grad()
                 step_loss.backward()
                 self.optim.step()
                 step_loss = step_loss.item()
-                pbar.set_postfix(step_loss=step_loss)
+                pbar.set_postfix(step_loss=step_loss, lr=self.optim.learning_rate)
                 loss += step_loss / args.steps_per_checkpoint #convert an tensor with dim 0 to value
                 current_step += 1
                 step_time += time.time() - time_flag
@@ -103,9 +84,9 @@ class Trainer(object):
                     sys.stdout.flush()
                     start_time = time.time()
             #save model after each epoch
-            mrr = self.validate(args, global_data, valid_dataset)
             checkpoint_path = os.path.join(model_dir, 'model_epoch_%d.ckpt' % current_epoch)
             self._save(current_epoch, checkpoint_path)
+            mrr = self.validate(args, global_data, valid_dataset)
             if mrr > best_mrr:
                 best_mrr = mrr
                 best_checkpoint_path = os.path.join(model_dir, 'model_best.ckpt')
@@ -128,7 +109,9 @@ class Trainer(object):
     def validate(self, args, global_data, valid_dataset):
         """ Validate model.
         """
-        candidate_size = global_data.product_size
+        candidate_size = args.valid_candi_size
+        if args.valid_candi_size < 1:
+            candidate_size = global_data.product_size
         dataloader = data.ProdSearchDataLoader(
                 valid_dataset, batch_size=args.valid_batch_size,
                 shuffle=False, num_workers=args.num_workers)
@@ -140,7 +123,7 @@ class Trainer(object):
         logger.info("MRR:{} P@1:{}".format(mrr, prec))
         return mrr
 
-    def test(self, args, global_data, test_prod_data, cutoff=100):
+    def test(self, args, global_data, test_prod_data, rankfname="test.best_model.ranklist", cutoff=100):
         candidate_size = global_data.product_size
         test_dataset = data.ProdSearchDataset(args, global_data, test_prod_data)
         dataloader = data.ProdSearchDataLoader(
@@ -153,7 +136,7 @@ class Trainer(object):
         sorted_prod_idxs = all_prod_scores.argsort(axis=-1)[:,::-1] #by default axis=-1, along the last axis
         mrr, prec = self.calc_metrics(all_prod_idxs, sorted_prod_idxs, all_target_idxs, candidate_size)
         logger.info("MRR:{} P@1:{}".format(mrr, prec))
-        output_path = os.path.join(args.save_dir, "test.best_model.ranklist")
+        output_path = os.path.join(args.save_dir, rankfname)
         eval_count = all_prod_scores.shape[0]
         print(all_prod_scores.shape)
         with open(output_path, 'w') as rank_fout:

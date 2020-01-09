@@ -116,7 +116,8 @@ class ProductRanker(nn.Module):
                 if self.review_encoder_name == "pvc":
                     slice_review_emb = self.review_encoder.get_para_vector(slice_reviews)
                 else: #fs or avg
-                    slice_review_emb = self.review_encoder(slice_reviews, slice_reviews.ne(self.word_pad_idx))
+                    slice_rword_emb = self.word_embeddings(slice_reviews)
+                    slice_review_emb = self.review_encoder(slice_rword_emb, slice_reviews.ne(self.word_pad_idx))
                 self.review_embeddings[i*batch_size:(i+1)*batch_size] = slice_review_emb
 
     def test(self, batch_data):
@@ -182,14 +183,14 @@ class ProductRanker(nn.Module):
         candi_scores = candi_scores.view(batch_size, candi_k)
         return candi_scores
 
-    def forward(self, batch_data_arr):
+    def forward(self, batch_data_arr, train_pv=True):
         loss = []
         for batch_data in batch_data_arr:
-            cur_loss = self.pass_one_batch(batch_data)
+            cur_loss = self.pass_one_batch(batch_data, train_pv)
             loss.append(cur_loss)
         return sum(loss) / len(loss)
 
-    def pass_one_batch(self, batch_data):
+    def pass_one_batch(self, batch_data, train_pv=True):
         query_word_idxs = batch_data.query_word_idxs
         pos_prod_ridxs = batch_data.pos_prod_ridxs
         pos_seg_idxs = batch_data.pos_seg_idxs
@@ -209,23 +210,34 @@ class ProductRanker(nn.Module):
         update_pos_prod_rword_masks = pos_prod_rword_masks.view(-1, posr_word_limit)
         pv_loss = None
         if "pv" in self.review_encoder_name:
+            if train_pv:
+                if self.review_encoder_name == "pv":
+                    pos_review_emb, pos_prod_loss = self.review_encoder(
+                            pos_prod_ridxs.view(-1), posr_word_emb,
+                            update_pos_prod_rword_masks, self.args.neg_per_pos)
+                elif self.review_encoder_name == "pvc":
+                    pos_review_emb, pos_prod_loss = self.review_encoder(
+                            posr_word_emb, update_pos_prod_rword_masks,
+                            pos_prod_rword_idxs_pvc.view(-1, pos_prod_rword_idxs_pvc.size(-1)),
+                            self.args.neg_per_pos)
+                sample_count = pos_prod_ridxs.ne(self.review_pad_idx).float().sum()
+                sample_count = sample_count.masked_fill(sample_count.eq(0),1)
+                pv_loss = pos_prod_loss.sum() / sample_count
+            else:
+                if self.review_encoder_name == "pv":
+                    pos_review_emb = self.review_encoder.get_para_vector(pos_prod_ridxs)
+                elif self.review_encoder_name == "pvc":
+                    pos_review_emb = self.review_encoder.get_para_vector(
+                            #pos_prod_rword_idxs_pvc.view(-1, pos_prod_rword_idxs_pvc.size(-1)))
+                            pos_prod_rword_idxs.view(-1, pos_prod_rword_idxs.size(-1)))
             if self.review_encoder_name == "pv":
-                pos_review_emb, pos_prod_loss = self.review_encoder(
-                        pos_prod_ridxs.view(-1), posr_word_emb,
-                        update_pos_prod_rword_masks, self.args.neg_per_pos)
                 neg_review_emb = self.review_encoder.get_para_vector(neg_prod_ridxs)
             elif self.review_encoder_name == "pvc":
-                pos_review_emb, pos_prod_loss = self.review_encoder(
-                        posr_word_emb, update_pos_prod_rword_masks,
-                        pos_prod_rword_idxs_pvc.view(-1, pos_prod_rword_idxs_pvc.size(-1)),
-                        self.args.neg_per_pos)
+                if not train_pv:
+                    neg_prod_rword_idxs_pvc = neg_prod_rword_idxs
                 neg_review_emb = self.review_encoder.get_para_vector(
                         neg_prod_rword_idxs_pvc.view(-1, neg_prod_rword_idxs_pvc.size(-1)))
                 neg_review_emb = neg_review_emb.view(batch_size, neg_k, neg_rcount, -1)
-
-            sample_count = pos_prod_ridxs.ne(self.review_pad_idx).float().sum()
-            sample_count = sample_count.masked_fill(sample_count.eq(0),1)
-            pv_loss = pos_prod_loss.sum() / sample_count
         else:
             negr_word_limit = neg_prod_rword_idxs.size()[-1]
             negr_word_emb = self.word_embeddings(neg_prod_rword_idxs.view(-1, negr_word_limit))

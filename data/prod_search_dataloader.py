@@ -6,7 +6,7 @@ from data.batch_data import ProdSearchTrainBatch, ProdSearchTestBatch
 
 
 class ProdSearchDataLoader(DataLoader):
-    def __init__(self, dataset, batch_size=1, shuffle=False, sampler=None,
+    def __init__(self, dataset, prepare_pv=True, batch_size=1, shuffle=False, sampler=None,
                  batch_sampler=None, num_workers=0, pin_memory=False,
                  drop_last=False, timeout=0, worker_init_fn=None):
         super(ProdSearchDataLoader, self).__init__(
@@ -14,6 +14,7 @@ class ProdSearchDataLoader(DataLoader):
             batch_sampler=batch_sampler, num_workers=num_workers,
             pin_memory=pin_memory, drop_last=drop_last, timeout=timeout,
             worker_init_fn=worker_init_fn, collate_fn=self._collate_fn)
+        self.prepare_pv = prepare_pv
         self.shuffle = shuffle
         self.review_pad_idx = self.dataset.review_pad_idx
         self.word_pad_idx = self.dataset.word_pad_idx
@@ -92,7 +93,7 @@ class ProdSearchDataLoader(DataLoader):
         neg_prod_rword_idxs = util.pad(neg_prod_rword_idxs, pad_id = self.word_pad_idx)
         neg_prod_rword_idxs = np.asarray(neg_prod_rword_idxs).reshape(batch_size, neg_k, nr_count, -1)
 
-        if "pv" in self.dataset.review_encoder_name:
+        if "pv" in self.dataset.review_encoder_name and self.prepare_pv:
             pos_prod_rword_idxs_pvc = pos_prod_rword_idxs
             neg_prod_rword_idxs_pvc = neg_prod_rword_idxs
             batch_size, pos_rcount, word_limit = pos_prod_rword_idxs.shape
