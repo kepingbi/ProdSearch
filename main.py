@@ -128,17 +128,20 @@ def train(args):
     global_data = GlobalProdSearchData(args, args.data_dir, args.input_train_dir)
     train_prod_data = ProdSearchData(args, args.input_train_dir, "train",
             global_data.vocab_size, global_data.review_count,
-            global_data.user_size, global_data.product_size)
+            global_data.user_size, global_data.product_size,
+            global_data.line_review_id_map)
     #subsampling has been done in train_prod_data
     model, optim = create_model(args, train_prod_data, args.train_from)
     trainer = Trainer(args, model, optim)
     valid_prod_data = ProdSearchData(args, args.input_train_dir, "valid",
             global_data.vocab_size, global_data.review_count,
-            global_data.user_size, global_data.product_size)
+            global_data.user_size, global_data.product_size,
+            global_data.line_review_id_map)
     best_checkpoint_path = trainer.train(trainer.args, global_data, train_prod_data, valid_prod_data)
     test_prod_data = ProdSearchData(args, args.input_train_dir, "test",
             global_data.vocab_size, global_data.review_count,
-            global_data.user_size, global_data.product_size)
+            global_data.user_size, global_data.product_size,
+            global_data.line_review_id_map)
     best_model, _ = create_model(args, train_prod_data, best_checkpoint_path)
     del trainer
     torch.cuda.empty_cache()
@@ -151,7 +154,8 @@ def validate(args):
     global_data = GlobalProdSearchData(args, args.data_dir, args.input_train_dir)
     valid_prod_data = ProdSearchData(args, args.input_train_dir, "valid",
             global_data.vocab_size, global_data.review_count,
-            global_data.user_size, global_data.product_size)
+            global_data.user_size, global_data.product_size,
+            global_data.line_review_id_map)
     valid_dataset = ProdSearchDataset(args, global_data, valid_prod_data)
     best_mrr, best_model = 0, None
     for cur_model_file in cp_files:
@@ -165,7 +169,8 @@ def validate(args):
 
     test_prod_data = ProdSearchData(args, args.input_train_dir, "test",
             global_data.vocab_size, global_data.review_count,
-            global_data.user_size, global_data.product_size)
+            global_data.user_size, global_data.product_size,
+            global_data.line_review_id_map)
 
     best_model, _ = create_model(args, test_prod_data, best_model)
     trainer = Trainer(args, best_model, None)
@@ -176,7 +181,8 @@ def get_product_scores(args):
     global_data = GlobalProdSearchData(args, args.data_dir, args.input_train_dir)
     test_prod_data = ProdSearchData(args, args.input_train_dir, "test",
             global_data.vocab_size, global_data.review_count,
-            global_data.user_size, global_data.product_size)
+            global_data.user_size, global_data.product_size,
+            global_data.line_review_id_map)
     best_model, _ = create_model(args, test_prod_data, args.test_from)
     trainer = Trainer(args, best_model, None)
     trainer.test(args, global_data, test_prod_data, args.rankfname)
