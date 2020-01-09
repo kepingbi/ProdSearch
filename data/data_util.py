@@ -27,13 +27,16 @@ class ProdSearchData():
             self.word_dists = self.neg_distributes(self.vocab_distribute)
 
         #self.product_query_idx = GlobalProdSearchData.read_arr_from_lines("{}/{}_query_idx.txt.gz".format(input_train_dir, set_name))
-        self.review_info, self.review_query_idx = self.read_review_id("{}/{}_id.txt.gz".format(input_train_dir, set_name))
+        self.review_info, self.review_query_idx = self.read_review_id(
+                "{}/{}_id.txt.gz".format(input_train_dir, set_name),
+                global_data.line_review_id_map)
         self.set_review_size = len(self.review_info)
         if args.train_review_only and set_name != "train":
             #u:reviews i:reviews
-            self.train_review_info, _ = self.read_review_id("{}/train_id.txt.gz".format(input_train_dir))
+            self.train_review_info, _ = self.read_review_id(
+                    "{}/train_id.txt.gz".format(input_train_dir),
+                    global_data.line_review_id_map)
             self.u_reviews, self.p_reviews = self.get_u_i_reviews(user_size, product_size, self.train_review_info)
-
 
     def get_u_i_reviews(self, user_size, product_size, review_info):
         u_reviews = [[] for i in range(self.user_size)]
@@ -46,13 +49,15 @@ class ProdSearchData():
     def initialize_epoch(self):
         self.neg_sample_products = np.random.randint(0, self.product_size, size = (self.set_review_size, self.neg_per_pos))
 
-    def read_review_id(self, fname):
+
+    def read_review_id(self, fname, line_review_id_map):
         query_ids = []
         review_info = []
         with gzip.open(fname, 'rt') as fin:
             for line in fin:
                 arr = line.strip().split('\t')
-                review_info.append((int(arr[0]), int(arr[1]), int(arr[-2].split('_')[-1])))#(user_idx, product_idx)
+                review_id = line_review_id_map[int(arr[-2].split('_')[-1])]
+                review_info.append((int(arr[0]), int(arr[1]), review_id))#(user_idx, product_idx)
                 query_ids.append(int(arr[-1]))
         return review_info, query_ids
 
@@ -119,6 +124,7 @@ class GlobalProdSearchData():
         self.u_r_seq = self.read_arr_from_lines("{}/u_r_seq.txt.gz".format(data_path)) #list of review ids
         self.i_r_seq = self.read_arr_from_lines("{}/p_r_seq.txt.gz".format(data_path)) #list of review ids
         self.review_loc_time = self.read_arr_from_lines("{}/review_uloc_ploc_and_time.txt.gz".format(data_path)) #(loc_in_u, loc_in_i, time) of each review
+        self.line_review_id_map = self.read_review_id_line_map("{}/review_id.txt.gz".format(data_path))
 
         print("Data statistic: vocab %d, review %d, user %d, product %d\n" % (self.vocab_size,
                     self.review_count, self.user_size, self.product_size))
@@ -142,6 +148,17 @@ class GlobalProdSearchData():
             rtn_line_arr[review_id] += [loc, time, rank]
         return rtn_line_arr
     '''
+
+    @staticmethod
+    def read_review_id_line_map(fname):
+        line_no_rid_map = dict()
+        with gzip.open(fname, 'rt') as fin:
+            idx = 0
+            for line in fin:
+                ori_line_id = int(line.strip().split('_')[-1])
+                line_no_rid_map[ori_line_id] = idx
+                idx += 1
+        return line_no_rid_map
 
     @staticmethod
     def read_arr_from_lines(fname):
