@@ -19,12 +19,14 @@ class ProdSearchData():
         self.sub_sampling_rate = None
         self.neg_sample_products = None
         self.word_dists = None
+        self.product_dists = None
 
         if set_name == "train":
-            self.vocab_distribute = self.read_reviews("{}/{}.txt.gz".format(input_train_dir, set_name))
+            self.vocab_distribute, self.product_distribute = self.read_reviews("{}/{}.txt.gz".format(input_train_dir, set_name))
             self.vocab_distribute = self.vocab_distribute.tolist()
             self.sub_sampling(args.subsampling_rate)
             self.word_dists = self.neg_distributes(self.vocab_distribute)
+            self.product_dists = self.neg_distributes(self.product_distribute)
 
         #self.product_query_idx = GlobalProdSearchData.read_arr_from_lines("{}/{}_query_idx.txt.gz".format(input_train_dir, set_name))
         self.review_info, self.review_query_idx = self.read_review_id(
@@ -47,7 +49,9 @@ class ProdSearchData():
         return u_reviews, p_reviews
 
     def initialize_epoch(self):
-        self.neg_sample_products = np.random.randint(0, self.product_size, size = (self.set_review_size, self.neg_per_pos))
+        #self.neg_sample_products = np.random.randint(0, self.product_size, size = (self.set_review_size, self.neg_per_pos))
+        self.neg_sample_products = np.random.choice(self.product_size,
+                size = (self.set_review_size, self.neg_per_pos), replace=True, p=self.product_dists)
 
 
     def read_review_id(self, fname, line_review_id_map):
@@ -63,16 +67,18 @@ class ProdSearchData():
 
     def read_reviews(self, fname):
         vocab_distribute = np.zeros(self.vocab_size)
+        product_distribute = np.zeros(self.product_size)
         #review_info = []
         with gzip.open(fname, 'rt') as fin:
             for line in fin:
                 arr = line.strip().split('\t')
                 #review_info.append((int(arr[0]), int(arr[1]))) # (user_idx, product_idx)
+                product_distribute[int(arr[1])] += 1
                 review_text = [int(i) for i in arr[2].split(' ')]
                 for idx in review_text:
                     vocab_distribute[idx] += 1
         #return vocab_distribute, review_info
-        return vocab_distribute
+        return vocab_distribute, product_distribute
     def sub_sampling(self, subsample_threshold):
         self.sub_sampling_rate = [1.0 for _ in range(self.vocab_size)]
         if subsample_threshold == 0.0:
