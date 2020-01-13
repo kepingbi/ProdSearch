@@ -17,7 +17,10 @@ class ParagraphVectorCorruption(nn.Module):
         self.word_embeddings = word_embeddings
         self.word_dists = word_dists
         self._embedding_size = self.word_embeddings.weight.size()[-1]
-        self.word_pad_idx = self.word_embeddings.weight.size()[0] - 1
+        vocab_size = self.word_embeddings.weight.size()[0]
+        self.word_pad_idx = vocab_size - 1
+        self.target_word_embeddings = nn.Embedding(
+            vocab_size, self._embedding_size, padding_idx=self.word_pad_idx)
         self.corrupt_rate = corrupt_rate
         self.dropout_ = dropout
         self.bce_logits_loss = torch.nn.BCEWithLogitsLoss(reduction='none')#by default it's mean

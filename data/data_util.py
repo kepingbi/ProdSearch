@@ -7,38 +7,43 @@ import gzip
 
 class ProdSearchData():
     def __init__(self, args, input_train_dir, set_name,
-            vocab_size, review_count,
+            vocab_size,
             user_size, product_size, line_review_id_map):
         self.args = args
         self.neg_per_pos = args.neg_per_pos
         self.set_name = set_name
-        self.review_count = review_count
         self.product_size = product_size
         self.user_size = user_size
         self.vocab_size = vocab_size
         self.sub_sampling_rate = None
         self.neg_sample_products = None
         self.word_dists = None
-        self.product_dists = None
-
+        self.subsampling_rate = args.subsampling_rate
+        if args.fix_emb:
+            self.subsampling_rate = 0
         if set_name == "train":
-            self.vocab_distribute, self.product_distribute = self.read_reviews("{}/{}.txt.gz".format(input_train_dir, set_name))
+            self.vocab_distribute = self.read_reviews("{}/{}.txt.gz".format(input_train_dir, set_name))
             self.vocab_distribute = self.vocab_distribute.tolist()
-            self.sub_sampling(args.subsampling_rate)
+            self.sub_sampling(self.subsampling_rate)
             self.word_dists = self.neg_distributes(self.vocab_distribute)
-            self.product_dists = self.neg_distributes(self.product_distribute)
 
         #self.product_query_idx = GlobalProdSearchData.read_arr_from_lines("{}/{}_query_idx.txt.gz".format(input_train_dir, set_name))
         self.review_info, self.review_query_idx = self.read_review_id(
                 "{}/{}_id.txt.gz".format(input_train_dir, set_name),
                 line_review_id_map)
+        if args.prod_freq_neg_sample:
+            self.product_distribute = self.collect_product_distribute(self.review_info)
+        else:
+            self.product_distribute = np.ones(self.product_size).tolist()
+        self.product_dists = self.neg_distributes(self.product_distribute)
+
         self.set_review_size = len(self.review_info)
         if args.train_review_only and set_name != "train":
             #u:reviews i:reviews
             self.train_review_info, _ = self.read_review_id(
                     "{}/train_id.txt.gz".format(input_train_dir),
                     line_review_id_map)
-            self.u_reviews, self.p_reviews = self.get_u_i_reviews(user_size, product_size, self.train_review_info)
+            self.u_reviews, self.p_reviews = self.get_u_i_reviews(self.user_size, self.product_size, self.train_review_info)
 
     def get_u_i_reviews(self, user_size, product_size, review_info):
         u_reviews = [[] for i in range(self.user_size)]
@@ -65,20 +70,25 @@ class ProdSearchData():
                 query_ids.append(int(arr[-1]))
         return review_info, query_ids
 
+    def collect_product_distribute(self, review_info):
+        product_distribute = np.zeros(self.product_size)
+        for uid, pid, _ in review_info:
+            product_distribute[pid] += 1
+        return product_distribute
+
     def read_reviews(self, fname):
         vocab_distribute = np.zeros(self.vocab_size)
-        product_distribute = np.zeros(self.product_size)
         #review_info = []
         with gzip.open(fname, 'rt') as fin:
             for line in fin:
                 arr = line.strip().split('\t')
                 #review_info.append((int(arr[0]), int(arr[1]))) # (user_idx, product_idx)
-                product_distribute[int(arr[1])] += 1
                 review_text = [int(i) for i in arr[2].split(' ')]
                 for idx in review_text:
                     vocab_distribute[idx] += 1
         #return vocab_distribute, review_info
-        return vocab_distribute, product_distribute
+        return vocab_distribute
+
     def sub_sampling(self, subsample_threshold):
         self.sub_sampling_rate = [1.0 for _ in range(self.vocab_size)]
         if subsample_threshold == 0.0:
@@ -123,10 +133,10 @@ class GlobalProdSearchData():
         self.review_words = self.read_words_in_lines(
                 "{}/review_text.txt.gz".format(data_path), cutoff=args.review_word_limit)
         self.review_length = [len(x) for x in self.review_words]
-        #self.review_words = util.pad(self.review_words, pad_id=self.vocab_size-1, width=args.review_word_limit)
         self.review_count = len(self.review_words) + 1
         self.review_words.append([self.word_pad_idx]) # * args.review_word_limit)
         #so that review_words[-1] = -1, ..., -1
+        self.review_words = util.pad(self.review_words, pad_id=self.vocab_size-1, width=args.review_word_limit)
         self.u_r_seq = self.read_arr_from_lines("{}/u_r_seq.txt.gz".format(data_path)) #list of review ids
         self.i_r_seq = self.read_arr_from_lines("{}/p_r_seq.txt.gz".format(data_path)) #list of review ids
         self.review_loc_time = self.read_arr_from_lines("{}/review_uloc_ploc_and_time.txt.gz".format(data_path)) #(loc_in_u, loc_in_i, time) of each review

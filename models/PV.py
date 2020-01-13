@@ -8,20 +8,34 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from models.text_encoder import get_vector_mean
+from others.util import load_pretrain_embeddings
 
 import argparse
 
 class ParagraphVector(nn.Module):
-    def __init__(self, word_embeddings, word_dists, review_count, dropout=0.0):
+    def __init__(self, word_embeddings, word_dists, review_count,
+            dropout=0.0, pretrain_emb_path=None, fix_emb=False):
         super(ParagraphVector, self).__init__()
         self.word_embeddings = word_embeddings
+        self.fix_emb = fix_emb
         self.dropout_ = dropout
         self.word_dists = word_dists
         self._embedding_size = self.word_embeddings.weight.size()[-1]
         self.review_count = review_count
         self.review_pad_idx = review_count-1
-        self.review_embeddings = nn.Embedding(self.review_count, self._embedding_size, padding_idx=self.review_pad_idx)
+        self.pretrain_emb_path = pretrain_emb_path
+        if pretrain_emb_path is not None:
+            pretrained_weights = load_pretrain_embeddings(pretrain_emb_path)
+            pretrained_weights.append([0. for _ in range(self._embedding_size)])
+            pretrained_weights = torch.FloatTensor(pretrained_weights)
+            self.review_embeddings = nn.Embedding.from_pretrained(pretrained_weights)
             #, scale_grad_by_freq = scale_grad, sparse=self.is_emb_sparse
+        else:
+            self.review_embeddings = nn.Embedding(
+                    self.review_count, self._embedding_size, padding_idx=self.review_pad_idx)
+        if self.fix_emb:
+            self.review_embeddings.weight.requires_grad = False
+            self.dropout_ = 0
         self.drop_layer = nn.Dropout(p=self.dropout_)
         self.bce_logits_loss = torch.nn.BCEWithLogitsLoss(reduction='none')#by default it's mean
 
@@ -37,7 +51,7 @@ class ParagraphVector(nn.Module):
         batch_size, pv_window_size, embedding_size = review_word_emb.size()
         #for each target word, there is k words negative sampling
         review_emb = self.review_embeddings(review_ids)
-        self.drop_layer = nn.Dropout(p=self.dropout_)
+        review_emb = self.drop_layer(review_emb)
         #vocab_size = self.word_embeddings.weight.size() - 1
         #compute the loss of review generating positive and negative words
         neg_sample_idxs = torch.multinomial(self.word_dists, batch_size * pv_window_size * n_negs, replacement=True)
@@ -69,7 +83,9 @@ class ParagraphVector(nn.Module):
         if logger:
             logger.info(" ReviewEncoder initialization started.")
         #otherwise, load pretrained embeddings
-        nn.init.normal_(self.review_embeddings.weight)
+        if self.pretrain_emb_path is None:
+            nn.init.normal_(self.review_embeddings.weight)
+
         if logger:
             logger.info(" ReviewEncoder initialization finished.")
 

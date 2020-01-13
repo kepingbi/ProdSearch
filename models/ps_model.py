@@ -6,6 +6,7 @@ review_encoder
 query_encoder
 transformer
 """
+import os
 import torch
 import torch.nn as nn
 from models.PV import ParagraphVector
@@ -14,7 +15,7 @@ from models.text_encoder import AVGEncoder, FSEncoder
 from models.transformer import TransformerEncoder
 from models.optimizers import Optimizer
 from others.logging import logger
-import others.util as util
+from others.util import pad, load_pretrain_embeddings
 
 def build_optim(args, model, checkpoint):
     """ Build optimizer """
@@ -49,7 +50,7 @@ def build_optim(args, model, checkpoint):
     return optim
 
 class ProductRanker(nn.Module):
-    def __init__(self, args, device, vocab_size, review_count, word_dists=None):
+    def __init__(self, args, device, vocab_size, review_count, padded_review_words, word_dists=None):
         super(ProductRanker, self).__init__()
         self.args = args
         self.device = device
@@ -57,62 +58,91 @@ class ProductRanker(nn.Module):
         self.embedding_size = args.embedding_size
         self.word_dists = None
         if word_dists is not None:
-            self.word_dists = torch.tensor(word_dists).to(device)
+            self.word_dists = torch.tensor(word_dists) #.to(device)
+        self.review_words = torch.tensor(padded_review_words)
         self.word_pad_idx = vocab_size-1
         self.seg_pad_idx = 3
         self.review_pad_idx = review_count-1
-        self.word_embeddings = nn.Embedding(
-            vocab_size, self.embedding_size, padding_idx=self.word_pad_idx)
+        self.emb_dropout = args.dropout
+        self.review_encoder_name = args.review_encoder_name
+        self.fix_emb = args.fix_emb
+        self.pretrain_emb_dir = args.pretrain_emb_dir
+        self.dropout_layer = nn.Dropout(p=self.dropout)
+        if self.fix_emb and args.review_encoder_name == "pvc":
+            #if review embeddings are fixed, just load the aggregated embeddings which include all the words in the review
+            #otherwise the reviews are cut off at review_word_limit
+            self.review_encoder_name = "pv"
+
+        if args.pretrain_emb_dir != "":
+            word_emb_fname = "word_emb.txt.gz" if self.review_encoder_name == "pv" else "context_emb.txt.gz"
+            pretrain_word_emb_path = os.path.join(args.pretrain_emb_dir, word_emb_fname)
+            pretrained_weights = torch.FloatTensor(load_pretrain_embeddings(pretrain_word_emb_path))
+            self.word_embeddings = nn.Embedding.from_pretrained(pretrained_weights)
+        else:
+            self.word_embeddings = nn.Embedding(
+                vocab_size, self.embedding_size, padding_idx=self.word_pad_idx)
+
         self.transformer_encoder = TransformerEncoder(
                 self.embedding_size, args.ff_size, args.heads,
                 args.dropout, args.inter_layers)
-        self.review_encoder_name = args.review_encoder_name
 
-        if args.review_encoder_name == "pv":
+        if self.review_encoder_name == "pv":
+            pretrain_emb_path = None
+            if args.pretrain_emb_dir != "":
+                pretrain_emb_path = os.path.join(args.pretrain_emb_dir, "doc_emb.txt.gz")
             self.review_encoder = ParagraphVector(
                     self.word_embeddings, self.word_dists,
-                    review_count, args.dropout)
-        elif args.review_encoder_name == "pvc":
+                    review_count, self.emb_dropout, pretrain_emb_path, fix_emb=self.fix_emb)
+        elif self.review_encoder_name == "pvc":
             self.review_encoder = ParagraphVectorCorruption(
-                    self.word_embeddings, self.word_dists, args.corrupt_rate, args.dropout)
-        elif args.review_encoder_name == "fs":
-            self.review_encoder = FSEncoder(self.embedding_size, args.dropout)
+                    self.word_embeddings, self.word_dists, args.corrupt_rate, self.emb_dropout)
+        elif self.review_encoder_name == "fs":
+            self.review_encoder = FSEncoder(self.embedding_size, self.emb_dropout)
         else:
-            self.review_encoder = AVGEncoder(self.embedding_size, args.dropout)
+            self.review_encoder = AVGEncoder(self.embedding_size, self.emb_dropout)
 
         if args.query_encoder_name == "fs":
-            self.query_encoder = FSEncoder(self.embedding_size, args.dropout)
+            self.query_encoder = FSEncoder(self.embedding_size, self.emb_dropout)
         else:
-            self.query_encoder = AVGEncoder(self.embedding_size, args.dropout)
+            self.query_encoder = AVGEncoder(self.embedding_size, self.emb_dropout)
         self.seg_embeddings = nn.Embedding(4, self.embedding_size, padding_idx=self.seg_pad_idx)
         #for each q,u,i
         #Q, previous purchases of u, current available reviews for i, padding value
         #self.logsoftmax = torch.nn.LogSoftmax(dim = -1)
         self.bce_logits_loss = torch.nn.BCEWithLogitsLoss(reduction='none')#by default it's mean
         self.review_embeddings = None
+        if self.fix_emb:
+            self.word_embeddings.weight.requires_grad = False
+            self.emb_dropout = 0
+            self.get_review_embeddings() #get model.review_embeddings
 
         self.initialize_parameters(logger) #logger
-        self.to(device)
+        self.to(device) #change model in place
+
 
     def load_cp(self, pt, strict=True):
         self.load_state_dict(pt['model'], strict=strict)
 
     def clear_review_embbeddings(self):
-        del self.review_embeddings
-        torch.cuda.empty_cache()
+        #otherwise review_embeddings are always the same
+        if not self.fix_emb:
+            self.review_embeddings = None
+            #del self.review_embeddings
+            torch.cuda.empty_cache()
 
-    def get_review_embeddings(self, global_data, batch_size=128):
+    def get_review_embeddings(self, batch_size=128):
+        if hasattr(self, "review_embeddings") and self.review_embeddings is not None:
+            return #if already computed and not deleted
         if self.review_encoder_name == "pv":
             self.review_embeddings = self.review_encoder.review_embeddings.weight
         else:
-            padded_review_words = util.pad(global_data.review_words, pad_id = self.word_pad_idx)
-            padded_review_words = torch.tensor(padded_review_words, device=self.device)
+            #padded_review_words = pad(global_data.review_words, pad_id = self.word_pad_idx)
             review_count = self.review_pad_idx
             seg_count = int((review_count - 1) / batch_size) + 1
             self.review_embeddings = torch.zeros(review_count+1, self.embedding_size, device=self.device)
             #The last one is always 0
             for i in range(seg_count):
-                slice_reviews = padded_review_words[i*batch_size:(i+1)*batch_size]
+                slice_reviews = self.review_words[i*batch_size:(i+1)*batch_size]
                 if self.review_encoder_name == "pvc":
                     slice_review_emb = self.review_encoder.get_para_vector(slice_reviews)
                 else: #fs or avg
@@ -128,43 +158,6 @@ class ProductRanker(nn.Module):
         query_emb = self.query_encoder(query_word_emb, query_word_idxs.ne(self.word_pad_idx))
         batch_size, candi_k, candi_rcount = candi_prod_ridxs.size()
         candi_review_emb = self.review_embeddings[candi_prod_ridxs]
-
-        #concat query_emb with pos_review_emb and candi_review_emb
-        query_mask = torch.ones(batch_size, 1, dtype=torch.uint8, device=query_word_idxs.device)
-        candi_prod_ridx_mask = candi_prod_ridxs.ne(self.review_pad_idx)
-        candi_review_mask = torch.cat([query_mask.unsqueeze(1).expand(-1,candi_k,-1), candi_prod_ridx_mask], dim=2)
-        #batch_size, 1, embedding_size
-        candi_sequence_emb = torch.cat(
-                (query_emb.unsqueeze(1).expand(-1, candi_k, -1).unsqueeze(2), candi_review_emb), dim=2)
-        #batch_size, candi_k, max_review_count+1, embedding_size
-        candi_seg_emb = self.seg_embeddings(candi_seg_idxs) #batch_size, candi_k, max_review_count+1, embedding_size
-        candi_sequence_emb += candi_seg_emb
-
-        candi_scores = self.transformer_encoder(
-                candi_sequence_emb.view(batch_size*candi_k, candi_rcount+1, -1),
-                candi_review_mask.view(batch_size*candi_k, candi_rcount+1))
-        candi_scores = candi_scores.view(batch_size, candi_k)
-        return candi_scores
-
-
-    def test_deprecated(self, batch_data):
-        query_word_idxs = batch_data.query_word_idxs
-        candi_prod_ridxs = batch_data.candi_prod_ridxs
-        candi_seg_idxs = batch_data.candi_seg_idxs
-        candi_prod_rword_idxs = batch_data.candi_prod_rword_idxs
-        query_word_emb = self.word_embeddings(query_word_idxs)
-        query_emb = self.query_encoder(query_word_emb, query_word_idxs.ne(self.word_pad_idx))
-        batch_size, candi_k, candi_rcount, candi_rword_limit = candi_prod_rword_idxs.size()
-        candi_prod_rword_idxs = candi_prod_rword_idxs.view(-1, candi_rword_limit)
-        if "pv" == self.review_encoder_name:
-            candi_review_emb = self.review_encoder.get_para_vector(candi_prod_ridxs)
-        elif "pvc" == self.review_encoder_name:
-            candi_review_emb = self.review_encoder.get_para_vector(candi_prod_rword_idxs)
-        else:
-            candi_rword_emb = self.word_embeddings(candi_prod_rword_idxs)
-            candi_prod_rword_masks = candi_prod_rword_idxs.ne(self.word_pad_idx)
-            candi_review_emb = self.review_encoder(candi_rword_emb, candi_prod_rword_masks)
-        candi_review_emb = candi_review_emb.view(batch_size, candi_k, candi_rcount, -1)
 
         #concat query_emb with pos_review_emb and candi_review_emb
         query_mask = torch.ones(batch_size, 1, dtype=torch.uint8, device=query_word_idxs.device)
@@ -224,28 +217,36 @@ class ProductRanker(nn.Module):
                 sample_count = sample_count.masked_fill(sample_count.eq(0),1)
                 pv_loss = pos_prod_loss.sum() / sample_count
             else:
+                if self.fix_emb:
+                    pos_review_emb = self.review_embeddings[pos_prod_ridxs]
+                else:
+                    if self.review_encoder_name == "pv":
+                        pos_review_emb = self.review_encoder.get_para_vector(pos_prod_ridxs)
+                    elif self.review_encoder_name == "pvc":
+                        pos_review_emb = self.review_encoder.get_para_vector(
+                                #pos_prod_rword_idxs_pvc.view(-1, pos_prod_rword_idxs_pvc.size(-1)))
+                                pos_prod_rword_idxs.view(-1, pos_prod_rword_idxs.size(-1)))
+            if self.fix_emb:
+                neg_review_emb = self.review_embeddings[neg_prod_ridxs]
+            else:
                 if self.review_encoder_name == "pv":
-                    pos_review_emb = self.review_encoder.get_para_vector(pos_prod_ridxs)
+                    neg_review_emb = self.review_encoder.get_para_vector(neg_prod_ridxs)
                 elif self.review_encoder_name == "pvc":
-                    pos_review_emb = self.review_encoder.get_para_vector(
-                            #pos_prod_rword_idxs_pvc.view(-1, pos_prod_rword_idxs_pvc.size(-1)))
-                            pos_prod_rword_idxs.view(-1, pos_prod_rword_idxs.size(-1)))
-            if self.review_encoder_name == "pv":
-                neg_review_emb = self.review_encoder.get_para_vector(neg_prod_ridxs)
-            elif self.review_encoder_name == "pvc":
-                if not train_pv:
-                    neg_prod_rword_idxs_pvc = neg_prod_rword_idxs
-                neg_review_emb = self.review_encoder.get_para_vector(
-                        neg_prod_rword_idxs_pvc.view(-1, neg_prod_rword_idxs_pvc.size(-1)))
-                neg_review_emb = neg_review_emb.view(batch_size, neg_k, neg_rcount, -1)
+                    if not train_pv:
+                        neg_prod_rword_idxs_pvc = neg_prod_rword_idxs
+                    neg_review_emb = self.review_encoder.get_para_vector(
+                            neg_prod_rword_idxs_pvc.view(-1, neg_prod_rword_idxs_pvc.size(-1)))
         else:
             negr_word_limit = neg_prod_rword_idxs.size()[-1]
             negr_word_emb = self.word_embeddings(neg_prod_rword_idxs.view(-1, negr_word_limit))
             pos_review_emb = self.review_encoder(posr_word_emb, update_pos_prod_rword_masks)
             neg_review_emb = self.review_encoder(negr_word_emb, neg_prod_rword_masks.view(-1, negr_word_limit))
-            neg_review_emb = neg_review_emb.view(batch_size, neg_k, neg_rcount, -1)
 
         pos_review_emb = pos_review_emb.view(batch_size, pos_rcount, -1)
+        neg_review_emb = neg_review_emb.view(batch_size, neg_k, neg_rcount, -1)
+
+        pos_review_emb = self.dropout_layer(pos_review_emb)
+        neg_review_emb = self.dropout_layer(neg_review_emb)
         #concat query_emb with pos_review_emb and neg_review_emb
         query_mask = torch.ones(batch_size, 1, dtype=torch.uint8, device=query_word_idxs.device)
         pos_review_mask = torch.cat([query_mask, pos_prod_ridxs.ne(self.review_pad_idx)], dim=1) #batch_size, 1+max_review_count
@@ -279,7 +280,8 @@ class ProductRanker(nn.Module):
     def initialize_parameters(self, logger=None):
         if logger:
             logger.info(" ProductRanker initialization started.")
-        nn.init.normal_(self.word_embeddings.weight)
+        if self.pretrain_emb_dir == "":
+            nn.init.normal_(self.word_embeddings.weight)
         nn.init.normal_(self.seg_embeddings.weight)
         self.review_encoder.initialize_parameters(logger)
         self.query_encoder.initialize_parameters(logger)

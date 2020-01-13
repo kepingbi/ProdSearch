@@ -57,8 +57,9 @@ class ProdSearchDataset(Dataset):
             #candidate_items = list(range(global_data.product_size))[:1000]
 
             if self.prod_data.set_name == "valid" and self.valid_candi_size > 1:
-                candidate_items = np.random.randint(0, global_data.product_size,
-                        size=self.valid_candi_size-1).tolist()
+                candidate_items = np.random.choice(global_data.product_size,
+                        size=self.valid_candi_size-1, replace=False, p=prod_data.product_dists).tolist()
+
                 candidate_items.append(prod_idx)
                 random.shuffle(candidate_items)
             else:
@@ -153,11 +154,14 @@ class ProdSearchDataset(Dataset):
         return train_data
 
     def get_pv_word_masks(self, prod_rword_idxs, subsampling_rate, pad_id):
-        rand_numbers = np.random.random(prod_rword_idxs.shape)
-        #subsampling_rate_arr = np.asarray([[subsampling_rate[prod_rword_idxs[i][j]] \
-        #        for j in range(prod_rword_idxs.shape[1])] for i in range(prod_rword_idxs.shape[0])])
-        subsampling_rate_arr = subsampling_rate[prod_rword_idxs]
-        masks = np.logical_and(prod_rword_idxs !=pad_id, rand_numbers < subsampling_rate_arr)
+        if subsampling_rate is None:
+            rand_numbers = np.random.random(prod_rword_idxs.shape)
+            #subsampling_rate_arr = np.asarray([[subsampling_rate[prod_rword_idxs[i][j]] \
+            #        for j in range(prod_rword_idxs.shape[1])] for i in range(prod_rword_idxs.shape[0])])
+            subsampling_rate_arr = subsampling_rate[prod_rword_idxs]
+            masks = np.logical_and(prod_rword_idxs !=pad_id, rand_numbers < subsampling_rate_arr)
+        else:
+            masks = (prod_rword_idxs !=pad_id)
         return masks
 
     def shuffle_words_in_reviews(self, prod_rword_idxs):

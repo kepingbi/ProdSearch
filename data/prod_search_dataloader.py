@@ -79,7 +79,7 @@ class ProdSearchDataLoader(DataLoader):
         pos_prod_ridxs = np.asarray(pos_prod_ridxs)
         batch_size, pos_rcount = pos_prod_ridxs.shape
         pos_prod_rword_idxs = [self.global_data.review_words[x] for x in pos_prod_ridxs.reshape(-1)]
-        pos_prod_rword_idxs = util.pad(pos_prod_rword_idxs, pad_id = self.word_pad_idx)
+        #pos_prod_rword_idxs = util.pad(pos_prod_rword_idxs, pad_id = self.word_pad_idx)
         pos_prod_rword_idxs = np.asarray(pos_prod_rword_idxs).reshape(batch_size, pos_rcount, -1)
         pos_prod_rword_masks = self.dataset.get_pv_word_masks(
                 pos_prod_rword_idxs, self.prod_data.sub_sampling_rate, pad_id=self.word_pad_idx)
@@ -90,7 +90,7 @@ class ProdSearchDataLoader(DataLoader):
         neg_prod_ridxs = np.asarray(neg_prod_ridxs)
         _, neg_k, nr_count = neg_prod_ridxs.shape
         neg_prod_rword_idxs = [self.global_data.review_words[x] for x in neg_prod_ridxs.reshape(-1)]
-        neg_prod_rword_idxs = util.pad(neg_prod_rword_idxs, pad_id = self.word_pad_idx)
+        #neg_prod_rword_idxs = util.pad(neg_prod_rword_idxs, pad_id = self.word_pad_idx)
         neg_prod_rword_idxs = np.asarray(neg_prod_rword_idxs).reshape(batch_size, neg_k, nr_count, -1)
 
         if "pv" in self.dataset.review_encoder_name and self.prepare_pv:

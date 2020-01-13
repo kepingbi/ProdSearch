@@ -1,3 +1,18 @@
+import gzip
+
+def load_pretrain_embeddings(fname):
+    embeddings = []
+    with gzip.open(fname, 'rt') as fin:
+        count = int(fin.readline().strip())
+        emb_size = int(fin.readline().strip())
+        for line in fin:
+            arr = line.strip(' ').split('\t')#the first element is empty
+            vector = arr[1].split()
+            vector = [float(x) for x in vector]
+            embeddings.append(vector)
+    print(len(embeddings))
+    print(len(embeddings[0]))
+    return embeddings
 
 def pad(data, pad_id, width=-1):
     if (width == -1):

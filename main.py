@@ -27,8 +27,12 @@ def parse_args():
     parser.add_argument('--seed', default=666, type=int)
     parser.add_argument("--train_from", default='')
     parser.add_argument("--test_from", default='')
+    parser.add_argument("--pretrain_emb_dir", default='')
+    parser.add_argument("--fix_emb", type=str2bool, nargs='?',const=True,default=False,
+            help="fix word embeddings or review embeddings during training.")
     parser.add_argument("--rankfname", default="test.best_model.ranklist")
     parser.add_argument("--dropout", default=0.1, type=float)
+    parser.add_argument("--token_dropout", default=0.1, type=float)
     parser.add_argument("--optim", type=str, default="adam", help="sgd or adam")
     parser.add_argument("--lr", default=0.002, type=float) #0.002
     parser.add_argument("--beta1", default= 0.9, type=float)
@@ -39,6 +43,9 @@ def parse_args():
                             help="Clip gradients to this norm.")
     parser.add_argument("--subsampling_rate", type=float, default=1e-5,
                             help="The rate to subsampling.")
+    parser.add_argument("--prod_freq_neg_sample", type=str2bool, nargs='?',const=True,default=False,
+            help="whether to sample negative products according to their purchase frequency.")
+
     parser.add_argument("--L2_lambda", type=float, default=0.0,
                             help="The lambda for L2 regularization.")
     parser.add_argument("--batch_size", type=int, default=32,
@@ -75,8 +82,8 @@ def parse_args():
     parser.add_argument("--train_review_only", type=str2bool, nargs='?',const=True,default=True,help="whether the representation of negative products need to be learned at each step.")
     parser.add_argument("--max_train_epoch", type=int, default=5,
                             help="Limit on the epochs of training (0: no limit).")
-    parser.add_argument("--train_pv_epoch", type=int, default=1,
-                            help="Limit on the epochs of training (0: no limit).")
+    parser.add_argument("--train_pv_epoch", type=int, default=0,
+                            help="Limit on the epochs of training pv (0: do not train according to pv loss).")
     parser.add_argument("--start_epoch", type=int, default=0,
                             help="the epoch where we start training.")
     parser.add_argument("--steps_per_checkpoint", type=int, default=200,
@@ -97,10 +104,10 @@ def parse_args():
 
 model_flags = ['embedding_size', 'ff_size', 'heads', 'inter_layers','review_encoder_name','query_encoder_name']
 
-def create_model(args, prod_data, load_path=''):
+def create_model(args, global_data, prod_data, load_path=''):
     """Create translation model and initialize or load parameters in session."""
-    model = ProductRanker(args, args.device, prod_data.vocab_size,
-            prod_data.review_count, prod_data.word_dists)
+    model = ProductRanker(args, args.device, global_data.vocab_size,
+            global_data.review_count, global_data.review_words, word_dists=prod_data.word_dists)
     if load_path != '':
         logger.info('Loading checkpoint from %s' % load_path)
         checkpoint = torch.load(load_path,
@@ -127,22 +134,22 @@ def train(args):
     random.seed(args.seed)
     global_data = GlobalProdSearchData(args, args.data_dir, args.input_train_dir)
     train_prod_data = ProdSearchData(args, args.input_train_dir, "train",
-            global_data.vocab_size, global_data.review_count,
+            global_data.vocab_size,
             global_data.user_size, global_data.product_size,
             global_data.line_review_id_map)
     #subsampling has been done in train_prod_data
-    model, optim = create_model(args, train_prod_data, args.train_from)
+    model, optim = create_model(args, global_data, train_prod_data, args.train_from)
     trainer = Trainer(args, model, optim)
     valid_prod_data = ProdSearchData(args, args.input_train_dir, "valid",
-            global_data.vocab_size, global_data.review_count,
+            global_data.vocab_size,
             global_data.user_size, global_data.product_size,
             global_data.line_review_id_map)
     best_checkpoint_path = trainer.train(trainer.args, global_data, train_prod_data, valid_prod_data)
     test_prod_data = ProdSearchData(args, args.input_train_dir, "test",
-            global_data.vocab_size, global_data.review_count,
+            global_data.vocab_size,
             global_data.user_size, global_data.product_size,
             global_data.line_review_id_map)
-    best_model, _ = create_model(args, train_prod_data, best_checkpoint_path)
+    best_model, _ = create_model(args, global_data, train_prod_data, best_checkpoint_path)
     del trainer
     torch.cuda.empty_cache()
     trainer = Trainer(args, best_model, None)
@@ -153,14 +160,14 @@ def validate(args):
     cp_files = sorted(glob.glob(os.path.join(args.save_dir, 'model_epoch_*.ckpt')))
     global_data = GlobalProdSearchData(args, args.data_dir, args.input_train_dir)
     valid_prod_data = ProdSearchData(args, args.input_train_dir, "valid",
-            global_data.vocab_size, global_data.review_count,
+            global_data.vocab_size,
             global_data.user_size, global_data.product_size,
             global_data.line_review_id_map)
     valid_dataset = ProdSearchDataset(args, global_data, valid_prod_data)
     best_mrr, best_model = 0, None
     for cur_model_file in cp_files:
         logger.info("Loading {}".format(cur_model_file))
-        cur_model, _ = create_model(args, valid_prod_data, cur_model_file)
+        cur_model, _ = create_model(args, global_data, valid_prod_data, cur_model_file)
         trainer = Trainer(args, cur_model, None)
         mrr = trainer.validate(args, global_data, valid_dataset)
         if mrr > best_mrr:
@@ -168,11 +175,11 @@ def validate(args):
             best_model = cur_model_file
 
     test_prod_data = ProdSearchData(args, args.input_train_dir, "test",
-            global_data.vocab_size, global_data.review_count,
+            global_data.vocab_size,
             global_data.user_size, global_data.product_size,
             global_data.line_review_id_map)
 
-    best_model, _ = create_model(args, test_prod_data, best_model)
+    best_model, _ = create_model(args, global_data, test_prod_data, best_model)
     trainer = Trainer(args, best_model, None)
     trainer.test(args, global_data, test_prod_data, args.rankfname)
 
@@ -180,10 +187,10 @@ def get_product_scores(args):
     init_logger(args.log_file)
     global_data = GlobalProdSearchData(args, args.data_dir, args.input_train_dir)
     test_prod_data = ProdSearchData(args, args.input_train_dir, "test",
-            global_data.vocab_size, global_data.review_count,
+            global_data.vocab_size,
             global_data.user_size, global_data.product_size,
             global_data.line_review_id_map)
-    best_model, _ = create_model(args, test_prod_data, args.test_from)
+    best_model, _ = create_model(args, global_data, test_prod_data, args.test_from)
     trainer = Trainer(args, best_model, None)
     trainer.test(args, global_data, test_prod_data, args.rankfname)
 

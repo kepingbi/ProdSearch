@@ -166,13 +166,13 @@ class Trainer(object):
             mrr += 1/rank
         mrr /= eval_count
         prec /= eval_count
-        print(mrr, prec)
+        print("MRR:{} P@1:{}".format(mrr, prec))
         return mrr, prec
 
     def get_prod_scores(self, args, global_data, dataset, dataloader, description, candidate_size):
         self.model.eval()
         with torch.no_grad():
-            self.model.get_review_embeddings(global_data) #get model.review_embeddings
+            self.model.get_review_embeddings() #get model.review_embeddings
             pbar = tqdm(dataloader)
             pbar.set_description(description)
             seg_count = int((candidate_size - 1) / args.candi_batch_size) + 1
