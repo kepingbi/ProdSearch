@@ -109,7 +109,8 @@ class ProductRanker(nn.Module):
         #for each q,u,i
         #Q, previous purchases of u, current available reviews for i, padding value
         #self.logsoftmax = torch.nn.LogSoftmax(dim = -1)
-        self.bce_logits_loss = torch.nn.BCEWithLogitsLoss(reduction='none', pos_weight)#by default it's mean
+        #self.bce_logits_loss = torch.nn.BCEWithLogitsLoss(reduction='none')#by default it's mean
+
         self.review_embeddings = None
         if self.fix_emb:
             self.word_embeddings.weight.requires_grad = False
@@ -275,7 +276,12 @@ class ProductRanker(nn.Module):
         prod_scores = torch.cat([pos_scores.unsqueeze(-1), neg_scores], dim=-1)
         target = torch.cat([torch.ones(batch_size, 1, device=query_word_idxs.device),
             torch.zeros(batch_size, neg_k, device=query_word_idxs.device)], dim=-1)
-        ps_loss = self.bce_logits_loss(prod_scores, target, weight=prod_mask.float())
+        #ps_loss = self.bce_logits_loss(prod_scores, target, weight=prod_mask.float())
+        ps_loss = nn.functional.binary_cross_entropy_with_logits(
+                prod_scores, target,
+                weight=prod_mask.float(),
+                reduction='none')
+
         ps_loss = ps_loss.sum(-1).mean()
         loss = ps_loss + pv_loss if pv_loss is not None else ps_loss
         return loss
