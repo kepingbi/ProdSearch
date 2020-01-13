@@ -109,7 +109,7 @@ class ProductRanker(nn.Module):
         #for each q,u,i
         #Q, previous purchases of u, current available reviews for i, padding value
         #self.logsoftmax = torch.nn.LogSoftmax(dim = -1)
-        self.bce_logits_loss = torch.nn.BCEWithLogitsLoss(reduction='none')#by default it's mean
+        self.bce_logits_loss = torch.nn.BCEWithLogitsLoss(reduction='none', pos_weight)#by default it's mean
         self.review_embeddings = None
         if self.fix_emb:
             self.word_embeddings.weight.requires_grad = False
@@ -267,12 +267,15 @@ class ProductRanker(nn.Module):
                 neg_sequence_emb.view(batch_size*neg_k, neg_rcount+1, -1),
                 neg_review_mask.view(batch_size*neg_k, neg_rcount+1))
         neg_scores = neg_scores.view(batch_size, neg_k)
-        prod_mask = torch.cat([torch.ones(batch_size, 1, dtype=torch.uint8, device=query_word_idxs.device),
+        pos_weight = 1
+        if self.args.pos_weight:
+            pos_weight = self.args.neg_per_pos
+        prod_mask = torch.cat([torch.ones(batch_size, 1, dtype=torch.uint8, device=query_word_idxs.device) * pos_weight,
             neg_prod_ridx_mask.sum(-1).ne(0)], dim=-1) #batch_size, neg_k (valid products, some are padded)
         prod_scores = torch.cat([pos_scores.unsqueeze(-1), neg_scores], dim=-1)
         target = torch.cat([torch.ones(batch_size, 1, device=query_word_idxs.device),
             torch.zeros(batch_size, neg_k, device=query_word_idxs.device)], dim=-1)
-        ps_loss = self.bce_logits_loss(prod_scores, target) * prod_mask.float()
+        ps_loss = self.bce_logits_loss(prod_scores, target, weight=prod_mask.float())
         ps_loss = ps_loss.sum(-1).mean()
         loss = ps_loss + pv_loss if pv_loss is not None else ps_loss
         return loss

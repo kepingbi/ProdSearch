@@ -45,7 +45,8 @@ def parse_args():
                             help="The rate to subsampling.")
     parser.add_argument("--prod_freq_neg_sample", type=str2bool, nargs='?',const=True,default=False,
             help="whether to sample negative products according to their purchase frequency.")
-
+    parser.add_argument("--pos_weight", type=str2bool, nargs='?',const=True,default=False,
+            help="use pos_weight different from 1 during training.")
     parser.add_argument("--L2_lambda", type=float, default=0.0,
                             help="The lambda for L2 regularization.")
     parser.add_argument("--batch_size", type=int, default=32,
