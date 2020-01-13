@@ -67,7 +67,7 @@ class ProductRanker(nn.Module):
         self.review_encoder_name = args.review_encoder_name
         self.fix_emb = args.fix_emb
         self.pretrain_emb_dir = args.pretrain_emb_dir
-        self.dropout_layer = nn.Dropout(p=self.dropout)
+        self.dropout_layer = nn.Dropout(p=args.dropout)
         if self.fix_emb and args.review_encoder_name == "pvc":
             #if review embeddings are fixed, just load the aggregated embeddings which include all the words in the review
             #otherwise the reviews are cut off at review_word_limit
@@ -236,6 +236,8 @@ class ProductRanker(nn.Module):
                         neg_prod_rword_idxs_pvc = neg_prod_rword_idxs
                     neg_review_emb = self.review_encoder.get_para_vector(
                             neg_prod_rword_idxs_pvc.view(-1, neg_prod_rword_idxs_pvc.size(-1)))
+            pos_review_emb = self.dropout_layer(pos_review_emb)
+            neg_review_emb = self.dropout_layer(neg_review_emb)
         else:
             negr_word_limit = neg_prod_rword_idxs.size()[-1]
             negr_word_emb = self.word_embeddings(neg_prod_rword_idxs.view(-1, negr_word_limit))
@@ -245,8 +247,6 @@ class ProductRanker(nn.Module):
         pos_review_emb = pos_review_emb.view(batch_size, pos_rcount, -1)
         neg_review_emb = neg_review_emb.view(batch_size, neg_k, neg_rcount, -1)
 
-        pos_review_emb = self.dropout_layer(pos_review_emb)
-        neg_review_emb = self.dropout_layer(neg_review_emb)
         #concat query_emb with pos_review_emb and neg_review_emb
         query_mask = torch.ones(batch_size, 1, dtype=torch.uint8, device=query_word_idxs.device)
         pos_review_mask = torch.cat([query_mask, pos_prod_ridxs.ne(self.review_pad_idx)], dim=1) #batch_size, 1+max_review_count

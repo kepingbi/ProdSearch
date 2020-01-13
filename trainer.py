@@ -86,11 +86,12 @@ class Trainer(object):
             #save model after each epoch
             checkpoint_path = os.path.join(model_dir, 'model_epoch_%d.ckpt' % current_epoch)
             self._save(current_epoch, checkpoint_path)
-            mrr = self.validate(args, global_data, valid_dataset)
+            mrr, prec = self.validate(args, global_data, valid_dataset)
+            logger.info("Epoch {}: MRR:{} P@1:{}".format(current_epoch, mrr, prec))
             if mrr > best_mrr:
                 best_mrr = mrr
                 best_checkpoint_path = os.path.join(model_dir, 'model_best.ckpt')
-                logger.info("Copying to checkpoint %s" % best_checkpoint_path)
+                logger.info("Copying %s to checkpoint %s" % (checkpoint_path, best_checkpoint_path))
                 shutil.copyfile(checkpoint_path, best_checkpoint_path)
         return best_checkpoint_path
 
@@ -120,8 +121,7 @@ class Trainer(object):
                 = self.get_prod_scores(args, global_data, valid_dataset, dataloader, "Validation", candidate_size)
         sorted_prod_idxs = all_prod_scores.argsort(axis=-1)[:,::-1] #by default axis=-1, along the last axis
         mrr, prec = self.calc_metrics(all_prod_idxs, sorted_prod_idxs, all_target_idxs, candidate_size)
-        logger.info("MRR:{} P@1:{}".format(mrr, prec))
-        return mrr
+        return mrr, prec
 
     def test(self, args, global_data, test_prod_data, rankfname="test.best_model.ranklist", cutoff=100):
         candidate_size = global_data.product_size
@@ -135,7 +135,7 @@ class Trainer(object):
                 = self.get_prod_scores(args, global_data, test_dataset, dataloader, "Test", candidate_size)
         sorted_prod_idxs = all_prod_scores.argsort(axis=-1)[:,::-1] #by default axis=-1, along the last axis
         mrr, prec = self.calc_metrics(all_prod_idxs, sorted_prod_idxs, all_target_idxs, candidate_size)
-        logger.info("MRR:{} P@1:{}".format(mrr, prec))
+        logger.info("Test: MRR:{} P@1:{}".format(mrr, prec))
         output_path = os.path.join(args.save_dir, rankfname)
         eval_count = all_prod_scores.shape[0]
         print(all_prod_scores.shape)
