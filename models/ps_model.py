@@ -58,24 +58,26 @@ class ProductRanker(nn.Module):
         self.embedding_size = args.embedding_size
         self.word_dists = None
         if word_dists is not None:
-            self.word_dists = torch.tensor(word_dists) #.to(device)
-        self.review_words = torch.tensor(padded_review_words)
+            self.word_dists = torch.tensor(word_dists, device=device)
+        self.review_words = torch.tensor(padded_review_words, device=device)
         self.word_pad_idx = vocab_size-1
         self.seg_pad_idx = 3
         self.review_pad_idx = review_count-1
         self.emb_dropout = args.dropout
         self.review_encoder_name = args.review_encoder_name
         self.fix_emb = args.fix_emb
-        self.pretrain_emb_dir = args.pretrain_emb_dir
+        self.pretrain_emb_dir = None
+        if os.path.exists(args.pretrain_emb_dir):
+            self.pretrain_emb_dir = args.pretrain_emb_dir
         self.dropout_layer = nn.Dropout(p=args.dropout)
         if self.fix_emb and args.review_encoder_name == "pvc":
             #if review embeddings are fixed, just load the aggregated embeddings which include all the words in the review
             #otherwise the reviews are cut off at review_word_limit
             self.review_encoder_name = "pv"
 
-        if args.pretrain_emb_dir != "":
+        if self.pretrain_emb_dir is not None:
             word_emb_fname = "word_emb.txt.gz" if self.review_encoder_name == "pv" else "context_emb.txt.gz"
-            pretrain_word_emb_path = os.path.join(args.pretrain_emb_dir, word_emb_fname)
+            pretrain_word_emb_path = os.path.join(self.pretrain_emb_dir, word_emb_fname)
             pretrained_weights = torch.FloatTensor(load_pretrain_embeddings(pretrain_word_emb_path))
             self.word_embeddings = nn.Embedding.from_pretrained(pretrained_weights)
         else:
@@ -88,8 +90,8 @@ class ProductRanker(nn.Module):
 
         if self.review_encoder_name == "pv":
             pretrain_emb_path = None
-            if args.pretrain_emb_dir != "":
-                pretrain_emb_path = os.path.join(args.pretrain_emb_dir, "doc_emb.txt.gz")
+            if self.pretrain_emb_dir is not None:
+                pretrain_emb_path = os.path.join(self.pretrain_emb_dir, "doc_emb.txt.gz")
             self.review_encoder = ParagraphVector(
                     self.word_embeddings, self.word_dists,
                     review_count, self.emb_dropout, pretrain_emb_path, fix_emb=self.fix_emb)
@@ -289,7 +291,7 @@ class ProductRanker(nn.Module):
     def initialize_parameters(self, logger=None):
         if logger:
             logger.info(" ProductRanker initialization started.")
-        if self.pretrain_emb_dir == "":
+        if self.pretrain_emb_dir is None:
             nn.init.normal_(self.word_embeddings.weight)
         nn.init.normal_(self.seg_embeddings.weight)
         self.review_encoder.initialize_parameters(logger)
