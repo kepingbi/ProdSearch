@@ -61,7 +61,7 @@ class TransformerEncoder(nn.Module):
         super(TransformerEncoder, self).__init__()
         self.d_model = d_model
         self.num_inter_layers = num_inter_layers
-        self.pos_emb = PositionalEncoding(dropout, d_model)
+        self.pos_emb = PositionalEncoding(dropout, d_model, max_len=100)
         self.transformer_inter = nn.ModuleList(
             [TransformerEncoderLayer(d_model, heads, d_ff, dropout)
              for _ in range(num_inter_layers)])

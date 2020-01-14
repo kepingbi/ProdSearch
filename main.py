@@ -69,8 +69,8 @@ def parse_args():
             help="Specify network structure parameters. ")
     parser.add_argument("--embedding_size", type=int, default=128, help="Size of each embedding.")
     parser.add_argument("--ff_size", type=int, default=512, help="size of feedforward layers in transformers.")
-    parser.add_argument("-heads", default=8, type=int, help="attention heads in transformers")
-    parser.add_argument("-inter_layers", default=2, type=int, help="transformer layers")
+    parser.add_argument("--heads", default=8, type=int, help="attention heads in transformers")
+    parser.add_argument("--inter_layers", default=2, type=int, help="transformer layers")
     parser.add_argument("--review_word_limit", type=int, default=100,
                             help="the limit of number of words in reviews.")
     parser.add_argument("--uprev_review_limit", type=int, default=10,
@@ -127,7 +127,6 @@ def create_model(args, global_data, prod_data, load_path=''):
 
 def train(args):
     args.start_epoch = 0
-    init_logger(args.log_file)
     logger.info('Device %s' % args.device)
 
     torch.manual_seed(args.seed)
@@ -151,7 +150,6 @@ def train(args):
     trainer.test(args, global_data, test_prod_data, args.rankfname)
 
 def validate(args):
-    init_logger(args.log_file)
     cp_files = sorted(glob.glob(os.path.join(args.save_dir, 'model_epoch_*.ckpt')))
     global_data = GlobalProdSearchData(args, args.data_dir, args.input_train_dir)
     valid_prod_data = ProdSearchData(args, args.input_train_dir, "valid", global_data)
@@ -173,14 +171,15 @@ def validate(args):
     trainer.test(args, global_data, test_prod_data, args.rankfname)
 
 def get_product_scores(args):
-    init_logger(args.log_file)
     global_data = GlobalProdSearchData(args, args.data_dir, args.input_train_dir)
     test_prod_data = ProdSearchData(args, args.input_train_dir, "test", global_data)
-    best_model, _ = create_model(args, global_data, test_prod_data, args.test_from)
+    model_path = os.path.join(args.save_dir, 'model_best.ckpt')
+    best_model, _ = create_model(args, global_data, test_prod_data, model_path)
     trainer = Trainer(args, best_model, None)
     trainer.test(args, global_data, test_prod_data, args.rankfname)
 
 def main(args):
+    init_logger(args.log_file)
     logger.info(args)
     if args.mode == "train":
         train(args)

@@ -117,7 +117,7 @@ class ProductRanker(nn.Module):
         self.review_embeddings = None
         if self.fix_emb:
             self.word_embeddings.weight.requires_grad = False
-            self.emb_dropout = 0
+            #self.emb_dropout = 0
             self.get_review_embeddings() #get model.review_embeddings
 
         self.initialize_parameters(logger) #logger
