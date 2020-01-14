@@ -29,7 +29,8 @@ def build_optim(args, model, checkpoint):
             args.optim, args.lr, args.max_grad_norm,
             beta1=args.beta1, beta2=args.beta2,
             decay_method=args.decay_method,
-            warmup_steps=args.warmup_steps)
+            warmup_steps=args.warmup_steps,
+            weight_decay=args.l2_lambda)
         #self.start_decay_steps take effect when decay_method is not noam
 
     optim.set_parameters(list(model.named_parameters()))
@@ -58,8 +59,8 @@ class ProductRanker(nn.Module):
         self.embedding_size = args.embedding_size
         self.word_dists = None
         if word_dists is not None:
-            self.word_dists = torch.tensor(word_dists) #.to(device)
-        self.review_words = torch.tensor(padded_review_words)
+            self.word_dists = torch.tensor(word_dists, device=device)
+        self.review_words = torch.tensor(padded_review_words, device=device)
         self.word_pad_idx = vocab_size-1
         self.seg_pad_idx = 3
         self.review_pad_idx = review_count-1

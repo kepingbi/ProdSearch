@@ -143,7 +143,8 @@ class Optimizer(object):
                  beta1=0.9, beta2=0.999,
                  adagrad_accum=0.0,
                  decay_method=None,
-                 warmup_steps=4000
+                 warmup_steps=4000,
+                 weight_decay = 0.
                  ):
         self.last_ppl = None
         self.learning_rate = learning_rate
@@ -159,6 +160,7 @@ class Optimizer(object):
         self.adagrad_accum = adagrad_accum
         self.decay_method = decay_method
         self.warmup_steps = warmup_steps
+        self.weight_decay = weight_decay
 
     def set_parameters(self, params):
         """ ? """
@@ -171,22 +173,22 @@ class Optimizer(object):
                 else:
                     self.sparse_params.append(p)
         if self.method == 'sgd':
-            self.optimizer = optim.SGD(self.params, lr=self.learning_rate)
+            self.optimizer = optim.SGD(self.params, lr=self.learning_rate, weight_decay=self.weight_decay)
         elif self.method == 'adagrad':
-            self.optimizer = optim.Adagrad(self.params, lr=self.learning_rate)
+            self.optimizer = optim.Adagrad(self.params, lr=self.learning_rate, weight_decay=self.weight_decay)
             for group in self.optimizer.param_groups:
                 for p in group['params']:
                     self.optimizer.state[p]['sum'] = self.optimizer\
                         .state[p]['sum'].fill_(self.adagrad_accum)
         elif self.method == 'adadelta':
-            self.optimizer = optim.Adadelta(self.params, lr=self.learning_rate)
+            self.optimizer = optim.Adadelta(self.params, lr=self.learning_rate, weight_decay=self.weight_decay)
         elif self.method == 'adam':
             self.optimizer = optim.Adam(self.params, lr=self.learning_rate,
-                                        betas=self.betas, eps=1e-9)
+                                        betas=self.betas, eps=1e-9, weight_decay=self.weight_decay)
         elif self.method == 'sparseadam':
             self.optimizer = MultipleOptimizer(
                 [optim.Adam(self.params, lr=self.learning_rate,
-                            betas=self.betas, eps=1e-8),
+                            betas=self.betas, eps=1e-8, weight_decay=self.weight_decay),
                  optim.SparseAdam(self.sparse_params, lr=self.learning_rate,
                                   betas=self.betas, eps=1e-8)])
         else:
