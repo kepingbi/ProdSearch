@@ -34,6 +34,7 @@ class ProdSearchData():
                     "{}/{}_id.txt.gz".format(input_train_dir, set_name),
                     global_data.line_review_id_map)
 
+            self.uq_pids = self.read_ranklist('{}/test.bias_product.ranklist'.format(input_train_dir))
             if args.train_review_only:
                 self.u_reviews, self.p_reviews = self.get_u_i_reviews(
                         self.user_size, self.product_size, global_data.train_review_info)
@@ -47,6 +48,16 @@ class ProdSearchData():
 
         self.set_review_size = len(self.review_info)
             #u:reviews i:reviews
+
+    def read_ranklist(self, fname):
+        uq_pids = defaultdict(list)
+        with open(fname, 'r') as fin:
+            for line in fin:
+                arr = line.strip().split(' ')
+                uid, qid = arr[0].split('_')
+                pid = arr[2]
+                uq_pids[(uid, int(qid))].append(pid)
+        return uq_pids
 
     def get_u_i_reviews(self, user_size, product_size, review_info):
         u_reviews = [[] for i in range(self.user_size)]
