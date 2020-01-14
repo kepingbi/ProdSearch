@@ -29,7 +29,8 @@ def build_optim(args, model, checkpoint):
             args.optim, args.lr, args.max_grad_norm,
             beta1=args.beta1, beta2=args.beta2,
             decay_method=args.decay_method,
-            warmup_steps=args.warmup_steps)
+            warmup_steps=args.warmup_steps,
+            weight_decay=args.l2_lambda)
         #self.start_decay_steps take effect when decay_method is not noam
 
     optim.set_parameters(list(model.named_parameters()))

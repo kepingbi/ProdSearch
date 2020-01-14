@@ -59,6 +59,7 @@ class ProdSearchDataset(Dataset):
             if self.prod_data.set_name == "valid" and self.valid_candi_size > 1:
                 candidate_items = np.random.choice(global_data.product_size,
                         size=self.valid_candi_size-1, replace=False, p=prod_data.product_dists).tolist()
+                #candidate_items = np.random.randint(0, global_data.product_size, size =self.valid_candi_size-1).tolist()
 
                 candidate_items.append(prod_idx)
                 random.shuffle(candidate_items)

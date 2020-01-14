@@ -6,15 +6,13 @@ import others.util as util
 import gzip
 
 class ProdSearchData():
-    def __init__(self, args, input_train_dir, set_name,
-            vocab_size,
-            user_size, product_size, line_review_id_map):
+    def __init__(self, args, input_train_dir, set_name, global_data):
         self.args = args
         self.neg_per_pos = args.neg_per_pos
         self.set_name = set_name
-        self.product_size = product_size
-        self.user_size = user_size
-        self.vocab_size = vocab_size
+        self.product_size = global_data.product_size
+        self.user_size = global_data.user_size
+        self.vocab_size = global_data.vocab_size
         self.sub_sampling_rate = None
         self.neg_sample_products = None
         self.word_dists = None
@@ -28,22 +26,27 @@ class ProdSearchData():
             self.word_dists = self.neg_distributes(self.vocab_distribute)
 
         #self.product_query_idx = GlobalProdSearchData.read_arr_from_lines("{}/{}_query_idx.txt.gz".format(input_train_dir, set_name))
-        self.review_info, self.review_query_idx = self.read_review_id(
-                "{}/{}_id.txt.gz".format(input_train_dir, set_name),
-                line_review_id_map)
-        if args.prod_freq_neg_sample:
-            self.product_distribute = self.collect_product_distribute(self.review_info)
+        if set_name == "train":
+            self.review_info = global_data.train_review_info
+            self.review_query_idx = global_data.train_query_idxs
         else:
-            self.product_distribute = np.ones(self.product_size).tolist()
+            self.review_info, self.review_query_idx = GlobalProdSearchData.read_review_id(
+                    "{}/{}_id.txt.gz".format(input_train_dir, set_name),
+                    global_data.line_review_id_map)
+
+            if args.train_review_only:
+                self.u_reviews, self.p_reviews = self.get_u_i_reviews(
+                        self.user_size, self.product_size, global_data.train_review_info)
+
+        if args.prod_freq_neg_sample:
+            self.product_distribute = self.collect_product_distribute(global_data.train_review_info)
+        else:
+            self.product_distribute = np.ones(self.product_size)
         self.product_dists = self.neg_distributes(self.product_distribute)
+        #print(self.product_dists)
 
         self.set_review_size = len(self.review_info)
-        if args.train_review_only and set_name != "train":
             #u:reviews i:reviews
-            self.train_review_info, _ = self.read_review_id(
-                    "{}/train_id.txt.gz".format(input_train_dir),
-                    line_review_id_map)
-            self.u_reviews, self.p_reviews = self.get_u_i_reviews(self.user_size, self.product_size, self.train_review_info)
 
     def get_u_i_reviews(self, user_size, product_size, review_info):
         u_reviews = [[] for i in range(self.user_size)]
@@ -59,16 +62,6 @@ class ProdSearchData():
                 size = (self.set_review_size, self.neg_per_pos), replace=True, p=self.product_dists)
 
 
-    def read_review_id(self, fname, line_review_id_map):
-        query_ids = []
-        review_info = []
-        with gzip.open(fname, 'rt') as fin:
-            for line in fin:
-                arr = line.strip().split('\t')
-                review_id = line_review_id_map[int(arr[-2].split('_')[-1])]
-                review_info.append((int(arr[0]), int(arr[1]), review_id))#(user_idx, product_idx)
-                query_ids.append(int(arr[-1]))
-        return review_info, query_ids
 
     def collect_product_distribute(self, review_info):
         product_distribute = np.zeros(self.product_size)
@@ -141,7 +134,8 @@ class GlobalProdSearchData():
         self.i_r_seq = self.read_arr_from_lines("{}/p_r_seq.txt.gz".format(data_path)) #list of review ids
         self.review_loc_time = self.read_arr_from_lines("{}/review_uloc_ploc_and_time.txt.gz".format(data_path)) #(loc_in_u, loc_in_i, time) of each review
         self.line_review_id_map = self.read_review_id_line_map("{}/review_id.txt.gz".format(data_path))
-
+        self.train_review_info, self.train_query_idxs = self.read_review_id(
+                "{}/train_id.txt.gz".format(input_train_dir), self.line_review_id_map)
         print("Data statistic: vocab %d, review %d, user %d, product %d\n" % (self.vocab_size,
                     self.review_count, self.user_size, self.product_size))
 
@@ -164,6 +158,17 @@ class GlobalProdSearchData():
             rtn_line_arr[review_id] += [loc, time, rank]
         return rtn_line_arr
     '''
+    @staticmethod
+    def read_review_id(fname, line_review_id_map):
+        query_ids = []
+        review_info = []
+        with gzip.open(fname, 'rt') as fin:
+            for line in fin:
+                arr = line.strip().split('\t')
+                review_id = line_review_id_map[int(arr[-2].split('_')[-1])]
+                review_info.append((int(arr[0]), int(arr[1]), review_id))#(user_idx, product_idx)
+                query_ids.append(int(arr[-1]))
+        return review_info, query_ids
 
     @staticmethod
     def read_review_id_line_map(fname):
