@@ -156,10 +156,11 @@ def validate(args):
     valid_dataset = ProdSearchDataset(args, global_data, valid_prod_data)
     best_mrr, best_model = 0, None
     for cur_model_file in cp_files:
-        logger.info("Loading {}".format(cur_model_file))
+        #logger.info("Loading {}".format(cur_model_file))
         cur_model, _ = create_model(args, global_data, valid_prod_data, cur_model_file)
         trainer = Trainer(args, cur_model, None)
-        mrr = trainer.validate(args, global_data, valid_dataset)
+        mrr, prec = trainer.validate(args, global_data, valid_dataset)
+        logger.info("MRR:{} P@1:{} Model:{}".format(mrr, prec, cur_model_file))
         if mrr > best_mrr:
             best_mrr = mrr
             best_model = cur_model_file

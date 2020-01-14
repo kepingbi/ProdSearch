@@ -49,11 +49,11 @@ class ProdSearchData():
             #u:reviews i:reviews
 
     def get_u_i_reviews(self, user_size, product_size, review_info):
-        u_reviews = [[] for i in range(self.user_size)]
-        p_reviews = [[] for i in range(self.product_size)]
+        u_reviews = [set() for i in range(self.user_size)]
+        p_reviews = [set() for i in range(self.product_size)]
         for u_idx, p_idx, r_idx in review_info:
-            u_reviews[u_idx].append(r_idx)
-            p_reviews[p_idx].append(r_idx)
+            u_reviews[u_idx].add(r_idx)
+            p_reviews[p_idx].add(r_idx)
         return u_reviews, p_reviews
 
     def initialize_epoch(self):
