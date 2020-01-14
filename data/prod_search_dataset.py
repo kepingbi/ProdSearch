@@ -38,7 +38,7 @@ class ProdSearchDataset(Dataset):
         else:
             self._data = self.collect_test_samples(self.global_data, self.prod_data, args.candi_batch_size)
 
-    def collect_test_samples(self, global_data, prod_data, candi_batch_size=1000):
+    def collect_test_samples_memcost(self, global_data, prod_data, candi_batch_size=1000):
         #Q, review of u + review of pos i, review of u + review of neg i;
         #words of pos reviews; words of neg reviews, all if encoder is not pv
         test_data = []
@@ -95,6 +95,40 @@ class ProdSearchDataset(Dataset):
                     candidate_items[i*candi_batch_size:(i+1)*candi_batch_size],
                     candi_batch_prod_ridxs[i*candi_batch_size:(i+1)*candi_batch_size],
                     candi_batch_seg_idxs[i*candi_batch_size:(i+1)*candi_batch_size]])
+
+        return test_data
+
+    def collect_test_samples(self, global_data, prod_data, candi_batch_size=1000):
+        #Q, review of u + review of pos i, review of u + review of neg i;
+        #words of pos reviews; words of neg reviews, all if encoder is not pv
+        test_data = []
+        uq_set = set()
+        for line_id, review in enumerate(prod_data.review_info):
+            if (line_id+1) % 1000 == 0:
+                progress = (line_id+1.) / len(prod_data.review_info) * 100
+                print("{}% data processed".format(progress))
+            user_idx, prod_idx, review_idx = review
+            query_idx = prod_data.review_query_idx[line_id]
+            if (user_idx, query_idx) in uq_set:
+                continue
+            uq_set.add((user_idx, query_idx))
+
+            #candidate item list according to user_idx and query_idx, or by default all the items
+            #candidate_items = list(range(global_data.product_size))[:1000]
+
+            if self.prod_data.set_name == "valid" and self.valid_candi_size > 1:
+                candidate_items = np.random.choice(global_data.product_size,
+                        size=self.valid_candi_size-1, replace=False, p=prod_data.product_dists).tolist()
+                #candidate_items = np.random.randint(0, global_data.product_size, size =self.valid_candi_size-1).tolist()
+                candidate_items.append(prod_idx)
+                random.shuffle(candidate_items)
+            else:
+                candidate_items = list(range(global_data.product_size))
+
+            seg_count = int((len(candidate_items) - 1) / candi_batch_size) + 1
+            for i in range(seg_count):
+                test_data.append([query_idx, user_idx, prod_idx, review_idx,
+                    candidate_items[i*candi_batch_size:(i+1)*candi_batch_size]])
 
         return test_data
 

@@ -55,7 +55,7 @@ class Trainer(object):
             prepare_pv = current_epoch < args.train_pv_epoch+1
             print(prepare_pv)
             dataloader = data.ProdSearchDataLoader(
-                    dataset, prepare_pv=prepare_pv, batch_size=args.batch_size,
+                    args, dataset, prepare_pv=prepare_pv, batch_size=args.batch_size,
                     shuffle=True, num_workers=args.num_workers)
             pbar = tqdm(dataloader)
             pbar.set_description("[Epoch {}]".format(current_epoch))
@@ -114,7 +114,7 @@ class Trainer(object):
         if args.valid_candi_size < 1:
             candidate_size = global_data.product_size
         dataloader = data.ProdSearchDataLoader(
-                valid_dataset, batch_size=args.valid_batch_size,
+                args, valid_dataset, batch_size=args.valid_batch_size,
                 shuffle=False, num_workers=args.num_workers)
         all_prod_idxs, all_prod_scores, all_target_idxs, \
                 all_query_idxs, all_user_idxs \
@@ -127,7 +127,7 @@ class Trainer(object):
         candidate_size = global_data.product_size
         test_dataset = data.ProdSearchDataset(args, global_data, test_prod_data)
         dataloader = data.ProdSearchDataLoader(
-                test_dataset, batch_size=args.valid_batch_size, #batch_size
+                args, test_dataset, batch_size=args.valid_batch_size, #batch_size
                 shuffle=False, num_workers=args.num_workers)
 
         all_prod_idxs, all_prod_scores, all_target_idxs, \

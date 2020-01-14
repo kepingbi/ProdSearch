@@ -129,10 +129,13 @@ def train(args):
     args.start_epoch = 0
     init_logger(args.log_file)
     logger.info('Device %s' % args.device)
-    if args.device == "cuda":
-        torch.cuda.manual_seed(args.seed)
+
     torch.manual_seed(args.seed)
     random.seed(args.seed)
+    torch.backends.cudnn.deterministic = True
+    if args.device == "cuda":
+        torch.cuda.manual_seed(args.seed)
+
     global_data = GlobalProdSearchData(args, args.data_dir, args.input_train_dir)
     train_prod_data = ProdSearchData(args, args.input_train_dir, "train", global_data)
     #subsampling has been done in train_prod_data
@@ -178,6 +181,7 @@ def get_product_scores(args):
     trainer.test(args, global_data, test_prod_data, args.rankfname)
 
 def main(args):
+    logger.info(args)
     if args.mode == "train":
         train(args)
     elif args.mode == "valid":
