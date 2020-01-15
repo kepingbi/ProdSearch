@@ -68,7 +68,7 @@ class TransformerEncoder(nn.Module):
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
         self.wo = nn.Linear(d_model, 1, bias=True)
 
-    def forward(self, input_vecs, mask):
+    def forward(self, input_vecs, mask, use_pos=True):
         """ See :obj:`EncoderBase.forward()`"""
 
         #input_vecs is batch_size, sequence_length, embedding_size
@@ -76,8 +76,9 @@ class TransformerEncoder(nn.Module):
         #batch_size, n_sents,
         x = input_vecs * mask[:, :, None].float()
 
-        pos_emb = self.pos_emb.pe[:, :n_sents]
-        x = x + pos_emb
+        if use_pos:
+            pos_emb = self.pos_emb.pe[:, :n_sents]
+            x = x + pos_emb
 
         for i in range(self.num_inter_layers):
             x = self.transformer_inter[i](i, x, x, 1 - mask)  # all_sents * max_tokens * dim

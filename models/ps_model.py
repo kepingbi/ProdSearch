@@ -266,10 +266,10 @@ class ProductRanker(nn.Module):
         pos_sequence_emb += pos_seg_emb
         neg_sequence_emb += neg_seg_emb
 
-        pos_scores = self.transformer_encoder(pos_sequence_emb, pos_review_mask)
+        pos_scores = self.transformer_encoder(pos_sequence_emb, pos_review_mask, use_pos=self.args.use_pos_emb)
         neg_scores = self.transformer_encoder(
                 neg_sequence_emb.view(batch_size*neg_k, neg_rcount+1, -1),
-                neg_review_mask.view(batch_size*neg_k, neg_rcount+1))
+                neg_review_mask.view(batch_size*neg_k, neg_rcount+1), use_pos=self.args.use_pos_emb)
         neg_scores = neg_scores.view(batch_size, neg_k)
         pos_weight = 1
         if self.args.pos_weight:

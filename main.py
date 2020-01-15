@@ -30,6 +30,8 @@ def parse_args():
     parser.add_argument("--pretrain_emb_dir", default='')
     parser.add_argument("--fix_emb", type=str2bool, nargs='?',const=True,default=False,
             help="fix word embeddings or review embeddings during training.")
+    parser.add_argument("--use_pos_emb", type=str2bool, nargs='?',const=True,default=True,
+            help="use positional embeddings when encoding reviews.")
     parser.add_argument("--rankfname", default="test.best_model.ranklist")
     parser.add_argument("--dropout", default=0.1, type=float)
     parser.add_argument("--token_dropout", default=0.1, type=float)
@@ -43,7 +45,7 @@ def parse_args():
                             help="Clip gradients to this norm.")
     parser.add_argument("--subsampling_rate", type=float, default=1e-5,
                             help="The rate to subsampling.")
-    parser.add_argument("--prod_freq_neg_sample", type=str2bool, nargs='?',const=True,default=True,
+    parser.add_argument("--prod_freq_neg_sample", type=str2bool, nargs='?',const=True,default=False,
             help="whether to sample negative products according to their purchase frequency.")
     parser.add_argument("--pos_weight", type=str2bool, nargs='?',const=True,default=False,
             help="use pos_weight different from 1 during training.")
