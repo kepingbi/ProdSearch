@@ -4,6 +4,7 @@ import numpy as np
 from collections import defaultdict
 import others.util as util
 import gzip
+import os
 
 class ProdSearchData():
     def __init__(self, args, input_train_dir, set_name, global_data):
@@ -17,6 +18,7 @@ class ProdSearchData():
         self.neg_sample_products = None
         self.word_dists = None
         self.subsampling_rate = args.subsampling_rate
+        self.uq_pids = None
         if args.fix_emb:
             self.subsampling_rate = 0
         if set_name == "train":
@@ -25,7 +27,8 @@ class ProdSearchData():
             self.sub_sampling(self.subsampling_rate)
             self.word_dists = self.neg_distributes(self.vocab_distribute)
 
-        #self.product_query_idx = GlobalProdSearchData.read_arr_from_lines("{}/{}_query_idx.txt.gz".format(input_train_dir, set_name))
+        self.product_query_idx = GlobalProdSearchData.read_arr_from_lines(
+                "{}/{}_query_idx.txt.gz".format(input_train_dir, set_name))
         if set_name == "train":
             self.review_info = global_data.train_review_info
             self.review_query_idx = global_data.train_query_idxs
@@ -34,10 +37,13 @@ class ProdSearchData():
                     "{}/{}_id.txt.gz".format(input_train_dir, set_name),
                     global_data.line_review_id_map)
 
-            self.uq_pids = self.read_ranklist('{}/test.bias_product.ranklist'.format(input_train_dir))
-            if args.train_review_only:
-                self.u_reviews, self.p_reviews = self.get_u_i_reviews(
-                        self.user_size, self.product_size, global_data.train_review_info)
+            franklist = '{}/{}.bias_product.ranklist'.format(input_train_dir, set_name)
+            #franklist = '{}/test.bias_product.ranklist'.format(input_train_dir)
+            if args.test_candi_size > 0 and os.path.exists(franklist): #otherwise use all the product ids
+                self.uq_pids = self.read_ranklist(franklist, global_data.product_asin2ids)
+            #if args.train_review_only:
+        self.u_reviews, self.p_reviews = self.get_u_i_reviews(
+                self.user_size, self.product_size, global_data.train_review_info)
 
         if args.prod_freq_neg_sample:
             self.product_distribute = self.collect_product_distribute(global_data.train_review_info)
@@ -49,17 +55,25 @@ class ProdSearchData():
         self.set_review_size = len(self.review_info)
             #u:reviews i:reviews
 
-    def read_ranklist(self, fname):
+    def read_ranklist(self, fname, product_asin2ids):
         uq_pids = defaultdict(list)
         with open(fname, 'r') as fin:
             for line in fin:
                 arr = line.strip().split(' ')
                 uid, qid = arr[0].split('_')
-                pid = arr[2]
-                uq_pids[(uid, int(qid))].append(pid)
+                asin = arr[2]
+                uq_pids[(uid, int(qid))].append(product_asin2ids[asin])
         return uq_pids
 
     def get_u_i_reviews(self, user_size, product_size, review_info):
+        u_reviews = [[] for i in range(self.user_size)]
+        p_reviews = [[] for i in range(self.product_size)]
+        for u_idx, p_idx, r_idx in review_info:
+            u_reviews[u_idx].append(r_idx)
+            p_reviews[p_idx].append(r_idx)
+        return u_reviews, p_reviews
+
+    def get_u_i_reviews_set(self, user_size, product_size, review_info):
         u_reviews = [set() for i in range(self.user_size)]
         p_reviews = [set() for i in range(self.product_size)]
         for u_idx, p_idx, r_idx in review_info:
@@ -125,6 +139,7 @@ class GlobalProdSearchData():
         self.review_word_limit = args.review_word_limit
 
         self.product_ids = self.read_lines("{}/product.txt.gz".format(data_path))
+        self.product_asin2ids = {x:i for i,x in enumerate(self.product_ids)}
         self.product_size = len(self.product_ids)
         self.user_ids = self.read_lines("{}/users.txt.gz".format(data_path))
         self.user_size = len(self.user_ids)
@@ -176,9 +191,11 @@ class GlobalProdSearchData():
         with gzip.open(fname, 'rt') as fin:
             for line in fin:
                 arr = line.strip().split('\t')
-                review_id = line_review_id_map[int(arr[-2].split('_')[-1])]
+                review_id = line_review_id_map[int(arr[2].split('_')[-1])]
                 review_info.append((int(arr[0]), int(arr[1]), review_id))#(user_idx, product_idx)
-                query_ids.append(int(arr[-1]))
+                if arr[-1].isdigit():
+                    query_ids.append(int(arr[-1]))
+                #if there is no query idx afer review_id, query_ids will be illegal and not used
         return review_info, query_ids
 
     @staticmethod

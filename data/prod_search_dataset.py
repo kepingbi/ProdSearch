@@ -34,7 +34,7 @@ class ProdSearchDataset(Dataset):
         self.global_data = global_data
         self.prod_data = prod_data
         if prod_data.set_name == "train":
-            self._data = self.collect_train_samples(self.global_data, self.prod_data)
+            self._data = self.collect_train_samples_random(self.global_data, self.prod_data)
         else:
             self._data = self.collect_test_samples(self.global_data, self.prod_data, args.candi_batch_size)
 
@@ -108,29 +108,83 @@ class ProdSearchDataset(Dataset):
                 progress = (line_id+1.) / len(prod_data.review_info) * 100
                 print("{}% data processed".format(progress))
             user_idx, prod_idx, review_idx = review
-            query_idx = prod_data.review_query_idx[line_id]
-            if (user_idx, query_idx) in uq_set:
-                continue
-            uq_set.add((user_idx, query_idx))
+            #query_idx = prod_data.review_query_idx[line_id]
+            query_idxs = prod_data.product_query_idx[prod_idx]
+            for query_idx in query_idxs:
+                if (user_idx, query_idx) in uq_set:
+                    continue
+                uq_set.add((user_idx, query_idx))
 
-            #candidate item list according to user_idx and query_idx, or by default all the items
-            #candidate_items = list(range(global_data.product_size))[:1000]
+                #candidate item list according to user_idx and query_idx, or by default all the items
+                #candidate_items = list(range(global_data.product_size))[:1000]
+                if prod_data.uq_pids is None:
+                    if self.prod_data.set_name == "valid" and self.valid_candi_size > 1:
+                        candidate_items = np.random.choice(global_data.product_size,
+                                size=self.valid_candi_size-1, replace=False, p=prod_data.product_dists).tolist()
+                        #candidate_items = np.random.randint(0, global_data.product_size, size =self.valid_candi_size-1).tolist()
+                        candidate_items.append(prod_idx)
+                        random.shuffle(candidate_items)
+                    else:
+                        candidate_items = list(range(global_data.product_size))
+                else:
+                    #print(global_data.user_ids[user_idx], query_idx)
+                    candidate_items = prod_data.uq_pids[(global_data.user_ids[user_idx], query_idx)]
+                    random.shuffle(candidate_items)
+                    #candidate_items = [global_data.product_asin2ids[x] for x in asin_list]
+                    #print(len(candidate_items))
 
-            if self.prod_data.set_name == "valid" and self.valid_candi_size > 1:
-                candidate_items = np.random.choice(global_data.product_size,
-                        size=self.valid_candi_size-1, replace=False, p=prod_data.product_dists).tolist()
-                #candidate_items = np.random.randint(0, global_data.product_size, size =self.valid_candi_size-1).tolist()
-                candidate_items.append(prod_idx)
-                random.shuffle(candidate_items)
-            else:
-                candidate_items = list(range(global_data.product_size))
-
-            seg_count = int((len(candidate_items) - 1) / candi_batch_size) + 1
-            for i in range(seg_count):
-                test_data.append([query_idx, user_idx, prod_idx, review_idx,
-                    candidate_items[i*candi_batch_size:(i+1)*candi_batch_size]])
+                seg_count = int((len(candidate_items) - 1) / candi_batch_size) + 1
+                for i in range(seg_count):
+                    test_data.append([query_idx, user_idx, prod_idx, review_idx,
+                        candidate_items[i*candi_batch_size:(i+1)*candi_batch_size]])
+        print(len(uq_set))
 
         return test_data
+
+    def collect_train_samples_random(self, global_data, prod_data):
+        #Q, review of u + review of pos i, review of u + review of neg i;
+        #words of pos reviews; words of neg reviews, all if encoder is not pv
+        train_data = []
+        for line_id, review in enumerate(prod_data.review_info):
+            if (line_id+1) % 20000 == 0:
+                progress = (line_id+1.) / len(prod_data.review_info) * 100
+                print("{}% data processed".format(progress))
+            user_idx, prod_idx, review_idx = review
+            query_idx = random.choice(prod_data.product_query_idx[prod_idx])
+            #query_idx = prod_data.review_query_idx[line_id]
+            #query_word_idxs = global_data.query_words[query_idx]
+            #review_idx = prod_data.review_ids[line_id]
+            u_prev_review_idxs = prod_data.u_reviews[user_idx]
+            if len(u_prev_review_idxs) > self.uprev_review_limit:
+                u_prev_review_idxs = random.sample(u_prev_review_idxs, self.uprev_review_limit)
+            i_prev_review_idxs = prod_data.p_reviews[prod_idx]
+            if len(i_prev_review_idxs) > self.iprev_review_limit:
+                i_prev_review_idxs = random.sample(i_prev_review_idxs, self.iprev_review_limit)
+            pos_seg_idxs = [0] + [1] * len(u_prev_review_idxs) + [2] * len(i_prev_review_idxs)
+            pos_seg_idxs = pos_seg_idxs[:self.total_review_limit + 1]
+            pos_prod_ridxs = u_prev_review_idxs + i_prev_review_idxs
+            pos_prod_ridxs = pos_prod_ridxs[:self.total_review_limit] # or select reviews with the most words
+
+            neg_prod_idxs = prod_data.neg_sample_products[line_id] #neg_per_pos
+            neg_prod_ridxs = []
+            neg_seg_idxs = []
+            for neg_i in neg_prod_idxs:
+                neg_i_prev_review_idxs = prod_data.p_reviews[neg_i]
+                if len(neg_i_prev_review_idxs) > self.iprev_review_limit:
+                    neg_i_prev_review_idxs = random.sample(neg_i_prev_review_idxs, self.iprev_review_limit)
+
+                cur_neg_i_masks = [0] + [1] * len(u_prev_review_idxs) + [2] * len(neg_i_prev_review_idxs)
+                cur_neg_i_masks = cur_neg_i_masks[:self.total_review_limit+1]
+                cur_neg_i_review_idxs = u_prev_review_idxs + neg_i_prev_review_idxs
+                cur_neg_i_review_idxs = cur_neg_i_review_idxs[:self.total_review_limit]
+                neg_seg_idxs.append(cur_neg_i_masks)
+                neg_prod_ridxs.append(cur_neg_i_review_idxs)
+                #neg_prod_rword_idxs.append([global_data.review_words[x] for x in cur_neg_i_review_idxs])
+            train_data.append([query_idx,
+                pos_prod_ridxs, pos_seg_idxs,
+                neg_prod_ridxs, neg_seg_idxs])
+            #neg_per_pos * iprev_review_limit * review_word_limit
+        return train_data
 
     def collect_train_samples(self, global_data, prod_data):
         #Q, review of u + review of pos i, review of u + review of neg i;

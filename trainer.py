@@ -124,7 +124,9 @@ class Trainer(object):
         return mrr, prec
 
     def test(self, args, global_data, test_prod_data, rankfname="test.best_model.ranklist", cutoff=100):
-        candidate_size = global_data.product_size
+        candidate_size = args.test_candi_size
+        if args.test_candi_size < 1:
+            candidate_size = global_data.product_size
         test_dataset = data.ProdSearchDataset(args, global_data, test_prod_data)
         dataloader = data.ProdSearchDataLoader(
                 args, test_dataset, batch_size=args.valid_batch_size, #batch_size
@@ -157,13 +159,13 @@ class Trainer(object):
         mrr, prec = 0, 0
         for i in range(eval_count):
             result = np.where(all_prod_idxs[i][sorted_prod_idxs[i]] == all_target_idxs[i])
-            if len(result[0]) == 0:
-                rank = candidate_size + 1
+            if len(result[0]) == 0: #not occur in the list
+                pass
             else:
                 rank = result[0][0] + 1
-            if rank == 1:
-                prec +=1
-            mrr += 1/rank
+                mrr += 1/rank
+                if rank == 1:
+                    prec +=1
         mrr /= eval_count
         prec /= eval_count
         print("MRR:{} P@1:{}".format(mrr, prec))

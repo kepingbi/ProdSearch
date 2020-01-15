@@ -55,6 +55,8 @@ def parse_args():
                             help="Batch size for validation to use during training.")
     parser.add_argument("--valid_candi_size", type=int, default=1000, #
                             help="Random products used for validation. When it is 0 or less, all the products are used.")
+    parser.add_argument("--test_candi_size", type=int, default=-1, #
+                            help="When it is 0 or less, all the products are used. Otherwise, test_candi_size samples from ranklist will be reranked")
     parser.add_argument("--candi_batch_size", type=int, default=1000,
                             help="Batch size for validation to use during training.")
     parser.add_argument("--num_workers", type=int, default=4,
@@ -140,7 +142,7 @@ def train(args):
     #subsampling has been done in train_prod_data
     model, optim = create_model(args, global_data, train_prod_data, args.train_from)
     trainer = Trainer(args, model, optim)
-    valid_prod_data = ProdSearchData(args, args.input_train_dir, "valid", global_data)
+    valid_prod_data = ProdSearchData(args, args.input_train_dir, "test", global_data)
     best_checkpoint_path = trainer.train(trainer.args, global_data, train_prod_data, valid_prod_data)
     test_prod_data = ProdSearchData(args, args.input_train_dir, "test", global_data)
     best_model, _ = create_model(args, global_data, train_prod_data, best_checkpoint_path)
@@ -153,6 +155,7 @@ def validate(args):
     cp_files = sorted(glob.glob(os.path.join(args.save_dir, 'model_epoch_*.ckpt')))
     global_data = GlobalProdSearchData(args, args.data_dir, args.input_train_dir)
     valid_prod_data = ProdSearchData(args, args.input_train_dir, "valid", global_data)
+    #valid_prod_data = ProdSearchData(args, args.input_train_dir, "test", global_data)
     valid_dataset = ProdSearchDataset(args, global_data, valid_prod_data)
     best_mrr, best_model = 0, None
     for cur_model_file in cp_files:

@@ -30,7 +30,47 @@ class ProdSearchDataLoader(DataLoader):
         if self.prod_data.set_name == 'train':
             return self.get_train_batch(batch)
         else: #validation or test
-            return self.get_test_batch(batch)
+            #return self.get_test_batch(batch)
+            return self.get_test_batch_random(batch)
+
+    def get_test_batch_random(self, batch):
+        query_idxs = [entry[0] for entry in batch]
+        query_word_idxs = [self.global_data.query_words[x] for x in query_idxs]
+        user_idxs = [entry[1] for entry in batch]
+        target_prod_idxs = [entry[2] for entry in batch]
+        candi_prod_idxs = [entry[4] for entry in batch]
+        candi_prod_ridxs = []
+        candi_seg_idxs = []
+        #candi_prod_ridxs = [entry[4] for entry in batch]
+        #candi_seg_idxs = [entry[5] for entry in batch]
+        for _, user_idx, _, review_idx, candidate_items in batch:
+            #if self.args.train_review_only:
+            u_prev_review_idxs = self.prod_data.u_reviews[user_idx][:self.args.uprev_review_limit]
+
+            candi_batch_seg_idxs = []
+            candi_batch_prod_ridxs = []
+            for candi_i in candidate_items:
+                candi_i_prev_review_idxs = self.prod_data.p_reviews[candi_i][:self.args.iprev_review_limit]
+                cur_candi_i_masks = [0] + [1] * len(u_prev_review_idxs) + [2] * len(candi_i_prev_review_idxs) #might be 0
+                cur_candi_i_masks = cur_candi_i_masks[:self.total_review_limit+1]
+                cur_candi_i_review_idxs = u_prev_review_idxs + candi_i_prev_review_idxs
+                cur_candi_i_review_idxs = cur_candi_i_review_idxs[:self.total_review_limit]
+                candi_batch_seg_idxs.append(cur_candi_i_masks)
+                candi_batch_prod_ridxs.append(cur_candi_i_review_idxs)
+            candi_prod_ridxs.append(candi_batch_prod_ridxs)
+            candi_seg_idxs.append(candi_batch_seg_idxs)
+
+        candi_prod_idxs = util.pad(candi_prod_idxs, pad_id = -1) #pad reviews
+        candi_prod_ridxs = util.pad_3d(candi_prod_ridxs, pad_id = self.review_pad_idx, dim=1) #pad candi products, no need
+        candi_prod_ridxs = util.pad_3d(candi_prod_ridxs, pad_id = self.review_pad_idx, dim=2) #pad reviews of each candi
+        candi_seg_idxs = util.pad_3d(candi_seg_idxs, pad_id = self.seg_pad_idx, dim=1)
+        candi_seg_idxs = util.pad_3d(candi_seg_idxs, pad_id = self.seg_pad_idx, dim=2)
+        candi_prod_ridxs = np.asarray(candi_prod_ridxs)
+        batch_size, candi_k, nr_count = candi_prod_ridxs.shape
+
+        batch = ProdSearchTestBatch(query_idxs, user_idxs, target_prod_idxs, candi_prod_idxs,
+                query_word_idxs, candi_prod_ridxs, candi_seg_idxs)
+        return batch
 
     def get_test_batch(self, batch):
         query_idxs = [entry[0] for entry in batch]
