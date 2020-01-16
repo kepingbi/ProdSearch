@@ -28,12 +28,14 @@ class ProdSearchData():
             self.sub_sampling(self.subsampling_rate)
             self.word_dists = self.neg_distributes(self.vocab_distribute)
 
-        self.product_query_idx = GlobalProdSearchData.read_arr_from_lines(
-                "{}/{}_query_idx.txt.gz".format(input_train_dir, set_name))
         if set_name == "train":
+            self.product_query_idx = GlobalProdSearchData.read_arr_from_lines(
+                     "{}/{}_query_idx.txt.gz".format(input_train_dir, set_name))
             self.review_info = global_data.train_review_info
             self.review_query_idx = global_data.train_query_idxs
         else:
+            self.product_query_idx = GlobalProdSearchData.read_arr_from_lines(
+                     "{}/test_query_idx.txt.gz".format(input_train_dir)) #validation and test have same set of queries
             self.review_info, self.review_query_idx = GlobalProdSearchData.read_review_id(
                     "{}/{}_id.txt.gz".format(input_train_dir, set_name),
                     global_data.line_review_id_map)

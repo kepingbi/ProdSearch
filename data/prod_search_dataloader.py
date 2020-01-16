@@ -33,7 +33,10 @@ class ProdSearchDataLoader(DataLoader):
             return self.get_train_batch(batch)
         else: #validation or test
             #return self.get_test_batch(batch)
-            return self.get_test_batch_random(batch)
+            if self.args.do_seq_review_test:
+                return self.get_test_batch(batch)
+            else:
+                return self.get_test_batch_random(batch)
 
     def get_test_batch_random(self, batch):
         query_idxs = [entry[0] for entry in batch]

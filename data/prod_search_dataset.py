@@ -36,7 +36,10 @@ class ProdSearchDataset(Dataset):
         self.global_data = global_data
         self.prod_data = prod_data
         if prod_data.set_name == "train":
-            self._data = self.collect_train_samples_random(self.global_data, self.prod_data)
+            if self.args.do_seq_review_train:
+                self._data = self.collect_train_samples(self.global_data, self.prod_data)
+            else:
+                self._data = self.collect_train_samples_random(self.global_data, self.prod_data)
         else:
             self._data = self.collect_test_samples(self.global_data, self.prod_data, args.candi_batch_size)
 
@@ -75,7 +78,6 @@ class ProdSearchDataset(Dataset):
                     random.shuffle(candidate_items)
                     #candidate_items = [global_data.product_asin2ids[x] for x in asin_list]
                     #print(len(candidate_items))
-
                 seg_count = int((len(candidate_items) - 1) / candi_batch_size) + 1
                 for i in range(seg_count):
                     test_data.append([query_idx, user_idx, prod_idx, review_idx,

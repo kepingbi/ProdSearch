@@ -190,6 +190,7 @@ class Trainer(object):
                 all_prod_scores.append(batch_scores.cpu().numpy())
                 all_target_idxs.append(np.asarray(batch_data.target_prod_idxs))
                 #use MRR
+        assert args.candi_batch_size <= candidate_size #otherwise results are wrong
         padded_length = seg_count * args.candi_batch_size
         all_prod_idxs = np.concatenate(all_prod_idxs, axis=0).reshape(-1, padded_length)[:, :candidate_size]
         all_prod_scores = np.concatenate(all_prod_scores, axis=0).reshape(-1, padded_length)[:, :candidate_size]

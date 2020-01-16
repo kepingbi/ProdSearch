@@ -28,6 +28,10 @@ def parse_args():
     parser.add_argument("--train_from", default='')
     parser.add_argument("--test_from", default='')
     parser.add_argument("--pretrain_emb_dir", default='')
+    parser.add_argument("--do_seq_review_train", type=str2bool, nargs='?',const=True,default=False,
+            help="only use reviews before current purchase for training; ")
+    parser.add_argument("--do_seq_review_test", type=str2bool, nargs='?',const=True,default=False,
+            help="during test time if only training data is available, use the most recent iprev and uprev reviews; if train_review_only is False, use all the sequential reviews available before current review, including validation and test.")
     parser.add_argument("--fix_emb", type=str2bool, nargs='?',const=True,default=False,
             help="fix word embeddings or review embeddings during training.")
     parser.add_argument("--use_pos_emb", type=str2bool, nargs='?',const=True,default=True,
