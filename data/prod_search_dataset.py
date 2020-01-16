@@ -20,8 +20,8 @@ class ProdSearchDataset(Dataset):
     def __init__(self, args, global_data, prod_data):
         self.args = args
         self.valid_candi_size = args.valid_candi_size
-        self.user_pad_idx = global_data.user_size - 1
-        self.prod_pad_idx = global_data.product_size - 1
+        self.user_pad_idx = global_data.user_size
+        self.prod_pad_idx = global_data.product_size
         self.word_pad_idx = global_data.vocab_size - 1
         self.review_pad_idx = global_data.review_count - 1
         self.seg_pad_idx = 3 # 0, 1, 2
@@ -127,7 +127,8 @@ class ProdSearchDataset(Dataset):
                 neg_i_prev_review_idxs = prod_data.p_reviews[neg_i]
                 if len(neg_i_prev_review_idxs) > self.iprev_review_limit:
                     neg_i_prev_review_idxs = random.sample(neg_i_prev_review_idxs, self.iprev_review_limit)
-
+                if len(neg_i_prev_review_idxs) == 0:
+                    continue
                 neg_i_user_idxs = [global_data.review_u_p[x][0] for x in neg_i_prev_review_idxs]
                 cur_neg_i_user_idxs =  [self.user_pad_idx] + [user_idx] * len(u_prev_review_idxs) + neg_i_user_idxs
                 cur_neg_i_user_idxs = cur_neg_i_user_idxs[:self.total_review_limit+1]
@@ -142,6 +143,9 @@ class ProdSearchDataset(Dataset):
                 neg_seg_idxs.append(cur_neg_i_masks)
                 neg_prod_ridxs.append(cur_neg_i_review_idxs)
                 #neg_prod_rword_idxs.append([global_data.review_words[x] for x in cur_neg_i_review_idxs])
+            if len(neg_prod_ridxs) == 0:
+                #all the neg prod do not have available reviews
+                continue
             train_data.append([query_idx, pos_prod_ridxs, pos_seg_idxs,
                 neg_prod_ridxs, neg_seg_idxs, pos_user_idxs, neg_user_idxs,
                 pos_item_idxs, neg_item_idxs])

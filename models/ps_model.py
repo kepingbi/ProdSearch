@@ -63,10 +63,8 @@ class ProductRanker(nn.Module):
         if word_dists is not None:
             self.word_dists = torch.tensor(word_dists, device=device)
         self.review_words = torch.tensor(padded_review_words, device=device)
-        self.product_size = product_size
-        self.prod_pad_idx = product_size - 1
-        self.user_size = user_size
-        self.user_pad_idx = user_size - 1
+        self.prod_pad_idx = product_size
+        self.user_pad_idx = user_size
         self.word_pad_idx = vocab_size - 1
         self.seg_pad_idx = 3
         self.review_pad_idx = review_count - 1
@@ -79,9 +77,9 @@ class ProductRanker(nn.Module):
         self.dropout_layer = nn.Dropout(p=args.dropout)
 
         if self.args.use_user_emb:
-            self.user_emb = nn.Embedding(self.user_size, self.embedding_size, padding_idx=self.user_pad_idx)
+            self.user_emb = nn.Embedding(user_size+1, self.embedding_size, padding_idx=self.user_pad_idx)
         if self.args.use_item_emb:
-            self.product_emb = nn.Embedding(self.product_size, self.embedding_size, padding_idx=self.prod_pad_idx)
+            self.product_emb = nn.Embedding(product_size+1, self.embedding_size, padding_idx=self.prod_pad_idx)
         if self.fix_emb and args.review_encoder_name == "pvc":
             #if review embeddings are fixed, just load the aggregated embeddings which include all the words in the review
             #otherwise the reviews are cut off at review_word_limit

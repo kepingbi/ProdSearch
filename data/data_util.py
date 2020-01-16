@@ -86,10 +86,9 @@ class ProdSearchData():
 
     def initialize_epoch(self):
         #self.neg_sample_products = np.random.randint(0, self.product_size, size = (self.set_review_size, self.neg_per_pos))
+        #exlude padding idx
         self.neg_sample_products = np.random.choice(self.product_size,
                 size = (self.set_review_size, self.neg_per_pos), replace=True, p=self.product_dists)
-
-
 
     def collect_product_distribute(self, review_info):
         product_distribute = np.zeros(self.product_size)
@@ -125,7 +124,7 @@ class ProdSearchData():
 
         self.sample_count = sum([self.sub_sampling_rate[i] * self.vocab_distribute[i] for i in range(self.vocab_size)])
         self.sub_sampling_rate = np.asarray(self.sub_sampling_rate)
-        logger.info("sample_count", self.sample_count)
+        logger.info("sample_count:{}".format(self.sample_count))
 
     def neg_distributes(self, weights, distortion = 0.75):
         #print weights
@@ -143,9 +142,9 @@ class GlobalProdSearchData():
 
         self.product_ids = self.read_lines("{}/product.txt.gz".format(data_path))
         self.product_asin2ids = {x:i for i,x in enumerate(self.product_ids)}
-        self.product_size = len(self.product_ids) + 1
+        self.product_size = len(self.product_ids)
         self.user_ids = self.read_lines("{}/users.txt.gz".format(data_path))
-        self.user_size = len(self.user_ids) + 1
+        self.user_size = len(self.user_ids)
         self.words = self.read_lines("{}/vocab.txt.gz".format(data_path))
         self.vocab_size = len(self.words) + 1
         self.query_words = self.read_words_in_lines("{}/query.txt.gz".format(input_train_dir))
@@ -167,7 +166,7 @@ class GlobalProdSearchData():
                 "{}/train_id.txt.gz".format(input_train_dir), self.line_review_id_map)
         self.review_u_p = self.read_arr_from_lines("{}/review_u_p.txt.gz".format(data_path)) #list of review ids
 
-        logger.info("Data statistic: vocab %d, review %d, user %d, product %d\n" % (self.vocab_size,
+        logger.info("Data statistic: vocab %d, review %d, user %d, product %d" % (self.vocab_size,
                     self.review_count, self.user_size, self.product_size))
 
 
