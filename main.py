@@ -32,6 +32,10 @@ def parse_args():
             help="fix word embeddings or review embeddings during training.")
     parser.add_argument("--use_pos_emb", type=str2bool, nargs='?',const=True,default=True,
             help="use positional embeddings when encoding reviews.")
+    parser.add_argument("--use_item_emb", type=str2bool, nargs='?',const=True,default=False,
+            help="use item embeddings when encoding review sequence.")
+    parser.add_argument("--use_user_emb", type=str2bool, nargs='?',const=True,default=False,
+            help="use user embeddings when encoding review sequence.")
     parser.add_argument("--rankfname", default="test.best_model.ranklist")
     parser.add_argument("--dropout", default=0.1, type=float)
     parser.add_argument("--token_dropout", default=0.1, type=float)
@@ -112,7 +116,8 @@ model_flags = ['embedding_size', 'ff_size', 'heads', 'inter_layers','review_enco
 def create_model(args, global_data, prod_data, load_path=''):
     """Create translation model and initialize or load parameters in session."""
     model = ProductRanker(args, args.device, global_data.vocab_size,
-            global_data.review_count, global_data.review_words, word_dists=prod_data.word_dists)
+            global_data.review_count, global_data.product_size, global_data.user_size,
+            global_data.review_words, word_dists=prod_data.word_dists)
     if load_path != '':
         logger.info('Loading checkpoint from %s' % load_path)
         checkpoint = torch.load(load_path,
@@ -144,7 +149,7 @@ def train(args):
     #subsampling has been done in train_prod_data
     model, optim = create_model(args, global_data, train_prod_data, args.train_from)
     trainer = Trainer(args, model, optim)
-    valid_prod_data = ProdSearchData(args, args.input_train_dir, "test", global_data)
+    valid_prod_data = ProdSearchData(args, args.input_train_dir, "valid", global_data)
     best_checkpoint_path = trainer.train(trainer.args, global_data, train_prod_data, valid_prod_data)
     test_prod_data = ProdSearchData(args, args.input_train_dir, "test", global_data)
     best_model, _ = create_model(args, global_data, train_prod_data, best_checkpoint_path)

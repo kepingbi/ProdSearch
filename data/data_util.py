@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 
+from others.logging import logger, init_logger
 from collections import defaultdict
 import others.util as util
 import gzip
@@ -122,7 +123,7 @@ class ProdSearchData():
 
         self.sample_count = sum([self.sub_sampling_rate[i] * self.vocab_distribute[i] for i in range(self.vocab_size)])
         self.sub_sampling_rate = np.asarray(self.sub_sampling_rate)
-        print("sample_count", self.sample_count)
+        logger.info("sample_count", self.sample_count)
 
     def neg_distributes(self, weights, distortion = 0.75):
         #print weights
@@ -140,9 +141,9 @@ class GlobalProdSearchData():
 
         self.product_ids = self.read_lines("{}/product.txt.gz".format(data_path))
         self.product_asin2ids = {x:i for i,x in enumerate(self.product_ids)}
-        self.product_size = len(self.product_ids)
+        self.product_size = len(self.product_ids) + 1
         self.user_ids = self.read_lines("{}/users.txt.gz".format(data_path))
-        self.user_size = len(self.user_ids)
+        self.user_size = len(self.user_ids) + 1
         self.words = self.read_lines("{}/vocab.txt.gz".format(data_path))
         self.vocab_size = len(self.words) + 1
         self.query_words = self.read_words_in_lines("{}/query.txt.gz".format(input_train_dir))
@@ -162,8 +163,11 @@ class GlobalProdSearchData():
         self.line_review_id_map = self.read_review_id_line_map("{}/review_id.txt.gz".format(data_path))
         self.train_review_info, self.train_query_idxs = self.read_review_id(
                 "{}/train_id.txt.gz".format(input_train_dir), self.line_review_id_map)
-        print("Data statistic: vocab %d, review %d, user %d, product %d\n" % (self.vocab_size,
+        self.review_u_p = self.read_arr_from_lines("{}/review_u_p.txt.gz".format(data_path)) #list of review ids
+
+        logger.info("Data statistic: vocab %d, review %d, user %d, product %d\n" % (self.vocab_size,
                     self.review_count, self.user_size, self.product_size))
+
 
 
     '''

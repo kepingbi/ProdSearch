@@ -51,7 +51,9 @@ def build_optim(args, model, checkpoint):
     return optim
 
 class ProductRanker(nn.Module):
-    def __init__(self, args, device, vocab_size, review_count, padded_review_words, word_dists=None):
+    def __init__(self, args, device, vocab_size, review_count,
+            product_size, user_size,
+            padded_review_words, word_dists=None):
         super(ProductRanker, self).__init__()
         self.args = args
         self.device = device
@@ -61,9 +63,13 @@ class ProductRanker(nn.Module):
         if word_dists is not None:
             self.word_dists = torch.tensor(word_dists, device=device)
         self.review_words = torch.tensor(padded_review_words, device=device)
-        self.word_pad_idx = vocab_size-1
+        self.product_size = product_size
+        self.prod_pad_idx = product_size - 1
+        self.user_size = user_size
+        self.user_pad_idx = user_size - 1
+        self.word_pad_idx = vocab_size - 1
         self.seg_pad_idx = 3
-        self.review_pad_idx = review_count-1
+        self.review_pad_idx = review_count - 1
         self.emb_dropout = args.dropout
         self.review_encoder_name = args.review_encoder_name
         self.fix_emb = args.fix_emb
@@ -71,6 +77,11 @@ class ProductRanker(nn.Module):
         if os.path.exists(args.pretrain_emb_dir):
             self.pretrain_emb_dir = args.pretrain_emb_dir
         self.dropout_layer = nn.Dropout(p=args.dropout)
+
+        if self.args.use_user_emb:
+            self.user_emb = nn.Embedding(self.user_size, self.embedding_size, padding_idx=self.user_pad_idx)
+        if self.args.use_item_emb:
+            self.product_emb = nn.Embedding(self.product_size, self.embedding_size, padding_idx=self.prod_pad_idx)
         if self.fix_emb and args.review_encoder_name == "pvc":
             #if review embeddings are fixed, just load the aggregated embeddings which include all the words in the review
             #otherwise the reviews are cut off at review_word_limit
@@ -158,6 +169,8 @@ class ProductRanker(nn.Module):
         query_word_idxs = batch_data.query_word_idxs
         candi_prod_ridxs = batch_data.candi_prod_ridxs
         candi_seg_idxs = batch_data.candi_seg_idxs
+        candi_seq_item_idxs = batch_data.candi_seq_item_idxs
+        candi_seq_user_idxs = batch_data.candi_seq_user_idxs
         query_word_emb = self.word_embeddings(query_word_idxs)
         query_emb = self.query_encoder(query_word_emb, query_word_idxs.ne(self.word_pad_idx))
         batch_size, candi_k, candi_rcount = candi_prod_ridxs.size()
@@ -173,6 +186,12 @@ class ProductRanker(nn.Module):
         #batch_size, candi_k, max_review_count+1, embedding_size
         candi_seg_emb = self.seg_embeddings(candi_seg_idxs) #batch_size, candi_k, max_review_count+1, embedding_size
         candi_sequence_emb += candi_seg_emb
+        if self.args.use_user_emb:
+            candi_seq_user_emb = self.user_emb(candi_seq_user_idxs)
+            candi_sequence_emb += candi_seq_user_emb
+        if self.args.use_item_emb:
+            candi_seq_item_emb = self.product_emb(candi_seq_item_idxs)
+            candi_sequence_emb += candi_seq_item_emb
 
         candi_scores = self.transformer_encoder(
                 candi_sequence_emb.view(batch_size*candi_k, candi_rcount+1, -1),
@@ -195,6 +214,10 @@ class ProductRanker(nn.Module):
         pos_prod_rword_masks = batch_data.pos_prod_rword_masks
         neg_prod_ridxs = batch_data.neg_prod_ridxs
         neg_seg_idxs = batch_data.neg_seg_idxs
+        pos_user_idxs = batch_data.pos_user_idxs
+        neg_user_idxs = batch_data.neg_user_idxs
+        pos_item_idxs = batch_data.pos_item_idxs
+        neg_item_idxs = batch_data.neg_item_idxs
         neg_prod_rword_idxs = batch_data.neg_prod_rword_idxs
         neg_prod_rword_masks = batch_data.neg_prod_rword_masks
         pos_prod_rword_idxs_pvc = batch_data.pos_prod_rword_idxs_pvc
@@ -265,6 +288,16 @@ class ProductRanker(nn.Module):
         neg_seg_emb = self.seg_embeddings(neg_seg_idxs) #batch_size, neg_k, max_review_count+1, embedding_size
         pos_sequence_emb += pos_seg_emb
         neg_sequence_emb += neg_seg_emb
+        if self.args.use_item_emb:
+            pos_seq_item_emb = self.product_emb(pos_item_idxs)
+            neg_seq_item_emb = self.product_emb(neg_item_idxs)
+            pos_sequence_emb += pos_seq_item_emb
+            neg_sequence_emb += neg_seq_item_emb
+        if self.args.use_user_emb:
+            pos_seq_user_emb = self.user_emb(pos_user_idxs)
+            neg_seq_user_emb = self.user_emb(neg_user_idxs)
+            pos_sequence_emb += pos_seq_user_emb
+            neg_sequence_emb += neg_seq_user_emb
 
         pos_scores = self.transformer_encoder(pos_sequence_emb, pos_review_mask, use_pos=self.args.use_pos_emb)
         neg_scores = self.transformer_encoder(

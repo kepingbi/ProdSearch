@@ -20,6 +20,8 @@ class ProdSearchDataset(Dataset):
     def __init__(self, args, global_data, prod_data):
         self.args = args
         self.valid_candi_size = args.valid_candi_size
+        self.user_pad_idx = global_data.user_size - 1
+        self.prod_pad_idx = global_data.product_size - 1
         self.word_pad_idx = global_data.vocab_size - 1
         self.review_pad_idx = global_data.review_count - 1
         self.seg_pad_idx = 3 # 0, 1, 2
@@ -38,65 +40,6 @@ class ProdSearchDataset(Dataset):
         else:
             self._data = self.collect_test_samples(self.global_data, self.prod_data, args.candi_batch_size)
 
-    def collect_test_samples_memcost(self, global_data, prod_data, candi_batch_size=1000):
-        #Q, review of u + review of pos i, review of u + review of neg i;
-        #words of pos reviews; words of neg reviews, all if encoder is not pv
-        test_data = []
-        uq_set = set()
-        for line_id, review in enumerate(prod_data.review_info):
-            if (line_id+1) % 1000 == 0:
-                progress = (line_id+1.) / len(prod_data.review_info) * 100
-                print("{}% data processed".format(progress))
-            user_idx, prod_idx, review_idx = review
-            query_idx = prod_data.review_query_idx[line_id]
-            if (user_idx, query_idx) in uq_set:
-                continue
-            uq_set.add((user_idx, query_idx))
-
-            #candidate item list according to user_idx and query_idx, or by default all the items
-            #candidate_items = list(range(global_data.product_size))[:1000]
-
-            if self.prod_data.set_name == "valid" and self.valid_candi_size > 1:
-                candidate_items = np.random.choice(global_data.product_size,
-                        size=self.valid_candi_size-1, replace=False, p=prod_data.product_dists).tolist()
-                #candidate_items = np.random.randint(0, global_data.product_size, size =self.valid_candi_size-1).tolist()
-
-                candidate_items.append(prod_idx)
-                random.shuffle(candidate_items)
-            else:
-                candidate_items = list(range(global_data.product_size))
-
-            #review_idx = prod_data.review_ids[line_id]
-            if self.train_review_only:
-                u_prev_review_idxs = prod_data.u_reviews[user_idx][:self.uprev_review_limit]
-            else:
-                review_time_stamp = global_data.review_loc_time[review_idx][2]
-                loc_in_u = global_data.review_loc_time[review_idx][0]
-                u_prev_review_idxs = global_data.u_r_seq[user_idx][max(0,loc_in_u-self.uprev_review_limit):loc_in_u]
-
-            candi_batch_seg_idxs = []
-            candi_batch_prod_ridxs = []
-            for candi_i in candidate_items:
-                if self.train_review_only:
-                    candi_i_prev_review_idxs = prod_data.p_reviews[candi_i][:self.iprev_review_limit]
-                else:
-                    loc_in_candi_i = self.bisect_right(global_data.i_r_seq[candi_i], global_data.review_loc_time, review_time_stamp)
-                    candi_i_prev_review_idxs = global_data.i_r_seq[candi_i][max(0,loc_in_candi_i-self.iprev_review_limit):loc_in_candi_i]
-                cur_candi_i_masks = [0] + [1] * len(u_prev_review_idxs) + [2] * len(candi_i_prev_review_idxs) #might be 0
-                cur_candi_i_masks = cur_candi_i_masks[:self.total_review_limit+1]
-                cur_candi_i_review_idxs = u_prev_review_idxs + candi_i_prev_review_idxs
-                cur_candi_i_review_idxs = cur_candi_i_review_idxs[:self.total_review_limit]
-                candi_batch_seg_idxs.append(cur_candi_i_masks)
-                candi_batch_prod_ridxs.append(cur_candi_i_review_idxs)
-
-            seg_count = int((len(candidate_items) - 1) / candi_batch_size) + 1
-            for i in range(seg_count):
-                test_data.append([query_idx, user_idx, prod_idx,
-                    candidate_items[i*candi_batch_size:(i+1)*candi_batch_size],
-                    candi_batch_prod_ridxs[i*candi_batch_size:(i+1)*candi_batch_size],
-                    candi_batch_seg_idxs[i*candi_batch_size:(i+1)*candi_batch_size]])
-
-        return test_data
 
     def collect_test_samples(self, global_data, prod_data, candi_batch_size=1000):
         #Q, review of u + review of pos i, review of u + review of neg i;
@@ -158,8 +101,16 @@ class ProdSearchDataset(Dataset):
             if len(u_prev_review_idxs) > self.uprev_review_limit:
                 u_prev_review_idxs = random.sample(u_prev_review_idxs, self.uprev_review_limit)
             i_prev_review_idxs = prod_data.p_reviews[prod_idx]
+
             if len(i_prev_review_idxs) > self.iprev_review_limit:
                 i_prev_review_idxs = random.sample(i_prev_review_idxs, self.iprev_review_limit)
+
+            i_user_idxs = [global_data.review_u_p[x][0] for x in i_prev_review_idxs]
+            u_item_idxs = [global_data.review_u_p[x][1] for x in u_prev_review_idxs]
+            pos_user_idxs =  [self.user_pad_idx] + [user_idx] * len(u_prev_review_idxs) + i_user_idxs
+            pos_user_idxs = pos_user_idxs[:self.total_review_limit + 1]
+            pos_item_idxs =  [self.prod_pad_idx] + u_item_idxs + [prod_idx] * len(i_prev_review_idxs)
+            pos_item_idxs = pos_item_idxs[:self.total_review_limit + 1]
             pos_seg_idxs = [0] + [1] * len(u_prev_review_idxs) + [2] * len(i_prev_review_idxs)
             pos_seg_idxs = pos_seg_idxs[:self.total_review_limit + 1]
             pos_prod_ridxs = u_prev_review_idxs + i_prev_review_idxs
@@ -168,21 +119,30 @@ class ProdSearchDataset(Dataset):
             neg_prod_idxs = prod_data.neg_sample_products[line_id] #neg_per_pos
             neg_prod_ridxs = []
             neg_seg_idxs = []
+            neg_user_idxs = []
+            neg_item_idxs = []
             for neg_i in neg_prod_idxs:
                 neg_i_prev_review_idxs = prod_data.p_reviews[neg_i]
                 if len(neg_i_prev_review_idxs) > self.iprev_review_limit:
                     neg_i_prev_review_idxs = random.sample(neg_i_prev_review_idxs, self.iprev_review_limit)
 
+                neg_i_user_idxs = [global_data.review_u_p[x][0] for x in neg_i_prev_review_idxs]
+                cur_neg_i_user_idxs =  [self.user_pad_idx] + [user_idx] * len(u_prev_review_idxs) + neg_i_user_idxs
+                cur_neg_i_user_idxs = cur_neg_i_user_idxs[:self.total_review_limit+1]
+                cur_neg_i_item_idxs =  [self.prod_pad_idx] + u_item_idxs + [neg_i] * len(neg_i_prev_review_idxs)
+                cur_neg_i_item_idxs = cur_neg_i_item_idxs[:self.total_review_limit+1]
                 cur_neg_i_masks = [0] + [1] * len(u_prev_review_idxs) + [2] * len(neg_i_prev_review_idxs)
                 cur_neg_i_masks = cur_neg_i_masks[:self.total_review_limit+1]
                 cur_neg_i_review_idxs = u_prev_review_idxs + neg_i_prev_review_idxs
                 cur_neg_i_review_idxs = cur_neg_i_review_idxs[:self.total_review_limit]
+                neg_user_idxs.append(cur_neg_i_user_idxs)
+                neg_item_idxs.append(cur_neg_i_item_idxs)
                 neg_seg_idxs.append(cur_neg_i_masks)
                 neg_prod_ridxs.append(cur_neg_i_review_idxs)
                 #neg_prod_rword_idxs.append([global_data.review_words[x] for x in cur_neg_i_review_idxs])
-            train_data.append([query_idx,
-                pos_prod_ridxs, pos_seg_idxs,
-                neg_prod_ridxs, neg_seg_idxs])
+            train_data.append([query_idx, pos_prod_ridxs, pos_seg_idxs,
+                neg_prod_ridxs, neg_seg_idxs, pos_user_idxs, neg_user_idxs,
+                pos_item_idxs, neg_item_idxs])
             #neg_per_pos * iprev_review_limit * review_word_limit
         return train_data
 
@@ -207,6 +167,14 @@ class ProdSearchDataset(Dataset):
             review_time_stamp = global_data.review_loc_time[review_idx][2]
             u_prev_review_idxs = global_data.u_r_seq[user_idx][max(0,loc_in_u-self.uprev_review_limit):loc_in_u]
             i_prev_review_idxs = global_data.i_r_seq[prod_idx][max(0,loc_in_i-self.iprev_review_limit):loc_in_i]
+
+            i_user_idxs = [global_data.review_u_p[x][0] for x in i_prev_review_idxs]
+            u_item_idxs = [global_data.review_u_p[x][1] for x in u_prev_review_idxs]
+            pos_user_idxs =  [self.user_pad_idx] + [user_idx] * len(u_prev_review_idxs) + i_user_idxs
+            pos_user_idxs = pos_user_idxs[:self.total_review_limit + 1]
+            pos_item_idxs =  [self.prod_pad_idx] + u_item_idxs + [prod_idx] * len(i_prev_review_idxs)
+            pos_item_idxs = pos_item_idxs[:self.total_review_limit + 1]
+
             pos_seg_idxs = [0] + [1] * len(u_prev_review_idxs) + [2] * len(i_prev_review_idxs)
             pos_seg_idxs = pos_seg_idxs[:self.total_review_limit + 1]
             pos_prod_ridxs = u_prev_review_idxs + i_prev_review_idxs
@@ -217,25 +185,35 @@ class ProdSearchDataset(Dataset):
             neg_prod_ridxs = []
             neg_seg_idxs = []
             #neg_prod_rword_idxs = []
+            neg_user_idxs = []
+            neg_item_idxs = []
             for neg_i in neg_prod_idxs:
                 loc_in_neg_i = self.bisect_right(global_data.i_r_seq[neg_i], global_data.review_loc_time, review_time_stamp)
                 if loc_in_neg_i == 0:
                     continue
                 #print(loc_in_neg_i)
                 neg_i_prev_review_idxs = global_data.i_r_seq[neg_i][max(0,loc_in_neg_i-self.iprev_review_limit):loc_in_neg_i]
+                neg_i_user_idxs = [global_data.review_u_p[x][0] for x in neg_i_prev_review_idxs]
+                cur_neg_i_user_idxs =  [self.user_pad_idx] + [user_idx] * len(u_prev_review_idxs) + neg_i_user_idxs
+                cur_neg_i_user_idxs = cur_neg_i_user_idxs[:self.total_review_limit+1]
+                cur_neg_i_item_idxs =  [self.prod_pad_idx] + u_item_idxs + [neg_i] * len(neg_i_prev_review_idxs)
+                cur_neg_i_item_idxs = cur_neg_i_item_idxs[:self.total_review_limit+1]
+
                 cur_neg_i_masks = [0] + [1] * len(u_prev_review_idxs) + [2] * len(neg_i_prev_review_idxs)
                 cur_neg_i_masks = cur_neg_i_masks[:self.total_review_limit+1]
                 cur_neg_i_review_idxs = u_prev_review_idxs + neg_i_prev_review_idxs
                 cur_neg_i_review_idxs = cur_neg_i_review_idxs[:self.total_review_limit]
+                neg_user_idxs.append(cur_neg_i_user_idxs)
+                neg_item_idxs.append(cur_neg_i_item_idxs)
                 neg_seg_idxs.append(cur_neg_i_masks)
                 neg_prod_ridxs.append(cur_neg_i_review_idxs)
                 #neg_prod_rword_idxs.append([global_data.review_words[x] for x in cur_neg_i_review_idxs])
             if len(neg_prod_ridxs) == 0:
                 #all the neg prod do not have available reviews
                 continue
-            train_data.append([query_idx,
-                pos_prod_ridxs, pos_seg_idxs,
-                neg_prod_ridxs, neg_seg_idxs])
+            train_data.append([query_idx, pos_prod_ridxs, pos_seg_idxs,
+                neg_prod_ridxs, neg_seg_idxs, pos_user_idxs, neg_user_idxs,
+                pos_item_idxs, neg_item_idxs])
             #neg_per_pos * iprev_review_limit * review_word_limit
             #all the reviews should have a set of words;
             #length is review_word_limit if encoder from bottom to top
