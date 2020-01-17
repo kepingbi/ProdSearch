@@ -1,4 +1,5 @@
 import gzip
+from others.logging import logger
 
 def load_pretrain_embeddings(fname):
     embeddings = []
@@ -10,8 +11,8 @@ def load_pretrain_embeddings(fname):
             vector = arr[1].split()
             vector = [float(x) for x in vector]
             embeddings.append(vector)
-    print(len(embeddings))
-    print(len(embeddings[0]))
+    logger.info("Loading {}".format(fname))
+    logger.info("Count:{} Embeddings size:{}".format(len(embeddings), len(embeddings[0])))
     return embeddings
 
 def pad(data, pad_id, width=-1):

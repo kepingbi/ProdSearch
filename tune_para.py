@@ -30,30 +30,40 @@ script_path = "python main.py"
 #CONST_CMD = " ".join(["--{} {}".format(x[0], x[1]) for x in CONST_CMD_ARR])
 pretrain_pv_root_dir = "/mnt/nfs/scratch1/kbi/review_transformer/working/paragraph_embeddings/reviews_##_5.json.gz.stem.nostop/min_count5/"
 pv_path = "batch_size256.negative_sample5.learning_rate0.5.embed_size128.steps_per_checkpoint400.max_train_epoch20.L2_lambda0.0.net_structpv_hdc./"
-small_pvc_path = "batch_size256.negative_sample5.learning_rate0.5.embed_size128.use_local_contextTrue.steps_per_checkpoint400.max_train_epoch20.L2_lambda0.0.net_structcdv_hdc."
+#small_pvc_path = "batch_size256.negative_sample5.learning_rate0.5.embed_size128.use_local_contextTrue.steps_per_checkpoint400.max_train_epoch20.L2_lambda0.0.net_structcdv_hdc."
+small_pvc_path = "batch_size256.negative_sample5.learning_rate0.5.embed_size128.subsampling_rate1e-05.use_local_contextTrue.steps_per_checkpoint400.max_train_epoch20.L2_lambda0.0.net_structcdv_hdc."
 large_pvc_path = "batch_size512.negative_sample5.learning_rate0.5.embed_size128.subsampling_rate1e-06.use_local_contextTrue.steps_per_checkpoint400.max_train_epoch20.L2_lambda0.0.net_structcdv_hdc." #subsampling_rate can be 1e-5,1e-6,1e-7
 
 #pretrain_pv_emb_dir = "/mnt/nfs/scratch1/kbi/review_transformer/working/paragraph_embeddings/reviews_##_5.json.gz.stem.nostop/min_count5/batch_size256.negative_sample5.learning_rate0.5.embed_size128.steps_per_checkpoint400.max_train_epoch20.L2_lambda0.0.net_structpv_hdc."
 #pretrain_pvc_emb_dir = "/mnt/nfs/scratch1/kbi/review_transformer/working/paragraph_embeddings/reviews_##_5.json.gz.stem.nostop/min_count5/batch_size256.negative_sample5.learning_rate0.5.embed_size128.use_local_contextTrue.steps_per_checkpoint400.max_train_epoch20.L2_lambda0.0.net_structcdv_hdc."
 
-para_names = ['review_encoder_name', 'max_train_epoch', 'lr', 'warmup_steps', 'batch_size', 'valid_candi_size', \
+para_names = ['pretrain_type', 'review_encoder_name', 'max_train_epoch', 'lr', 'warmup_steps', 'batch_size', 'valid_candi_size', \
         'embedding_size', 'review_word_limit', 'iprev_review_limit', 'dropout', \
         'prod_freq_neg_sample', 'fix_emb', 'pos_weight', 'l2_lambda', 'ff_size', 'inter_layers', 'use_user_emb', 'use_item_emb']
-short_names = ['enc', 'me', 'lr', 'ws', 'bs', 'vcs', 'ebs', \
+short_names = ['pretrain', 'enc', 'me', 'lr', 'ws', 'bs', 'vcs', 'ebs', \
                 'rwl', 'irl', 'drop', 'prodneg', 'fixemb', 'poswt', 'lambda', 'ff', 'ly', 'ue', 'ie']
 
 paras = [
-        ('Clothing_Shoes_and_Jewelry', None, 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
-        ('Electronics', None, 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
-        ('Movies_and_TV', None, 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
-        ('Kindle_Store', None, 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
-        ('Sports_and_Outdoors', None, 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        ('Cell_Phones_and_Accessories', 'pvc', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        ('Cell_Phones_and_Accessories', 'pvc', 'pvc', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        #('Cell_Phones_and_Accessories', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
+        #('Cell_Phones_and_Accessories', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        #('Cell_Phones_and_Accessories', 'pvc', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
+        #('Cell_Phones_and_Accessories', 'pvc', 'pvc', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
+        #('Cell_Phones_and_Accessories', 'pv', 'pv', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
+        #('Cell_Phones_and_Accessories', 'pv', 'pv', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, True, False, 0, 512, 2, False, False),
 
-        ('Clothing_Shoes_and_Jewelry', 'pv', 'pv', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, True, False, 0, 512, 2, True, True),
-        ('Electronics', 'pv', 'pv', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, True, False, 0, 512, 2, True, True),
-        ('Movies_and_TV', 'pv', 'pv', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, True, False, 0, 512, 2, True, True),
-        ('Kindle_Store', 'pv', 'pv', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, True, False, 0, 512, 2, True, True),
-        ('Sports_and_Outdoors', 'pv', 'pv', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, True, False, 0, 512, 2, True, True),
+        #('Clothing_Shoes_and_Jewelry', None, 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        #('Electronics', None, 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        #('Movies_and_TV', None, 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        #('Kindle_Store', None, 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        #('Sports_and_Outdoors', None, 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'pv', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, True, False, 0, 512, 2, True, True),
+        #('Electronics', 'pv', 'pv', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, True, False, 0, 512, 2, True, True),
+        #('Movies_and_TV', 'pv', 'pv', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, True, False, 0, 512, 2, True, True),
+        #('Kindle_Store', 'pv', 'pv', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, True, False, 0, 512, 2, True, True),
+        #('Sports_and_Outdoors', 'pv', 'pv', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, True, False, 0, 512, 2, True, True),
 
         #('Cell_Phones_and_Accessories', None, 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
         #('Cell_Phones_and_Accessories', None, 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, False),
@@ -135,9 +145,9 @@ paras = [
 if __name__ == '__main__':
     fscript = open("run_model.sh", 'w')
     parser = argparse.ArgumentParser()
-    parser.add_argument("--log_dir", type=str, default='exp_log')
+    #parser.add_argument("--log_dir", type=str, default='exp_log')
     args = parser.parse_args()
-    os.system("mkdir -p %s" % args.log_dir)
+    #os.system("mkdir -p %s" % args.log_dir)
     os.system("mkdir -p script")
     os.system("mkdir -p log")
     job_id = 0
@@ -154,7 +164,6 @@ if __name__ == '__main__':
                 pretrain_emb_dir = os.path.join(pretrain_pv_root_dir.replace('##', dataset), large_pvc_path)
         else:
             pretrain_emb_dir = "None"
-        para = para[2:]
         dataset_name = "reviews_%s_5.json.gz.stem.nostop" % dataset
         data_dir = "%s/%s/min_count5" % (WORKING_DIR, dataset_name)
         input_train_dir = os.path.join(data_dir, "seq_query_split")
@@ -163,13 +172,13 @@ if __name__ == '__main__':
         cmd_arr.append('--pretrain_emb_dir {}'.format(pretrain_emb_dir))
         cmd_arr.append('--input_train_dir {}'.format(input_train_dir))
         output_path = "%s/%s" % (OUTPUT_DIR, dataset_name)
-        model_name = "_".join(["{}{}".format(x,y) for x,y in zip(short_names, para)])
+        model_name = "_".join(["{}{}".format(x,y) for x,y in zip(short_names, para[1:])])
         save_dir = os.path.join(output_path, model_name)
-        cur_cmd_option = " ".join(["--{} {}".format(x,y) for x,y in zip(para_names, para)])
+        cur_cmd_option = " ".join(["--{} {}".format(x,y) for x,y in zip(para_names[1:], para[2:])])
         cmd_arr.append(cur_cmd_option)
         cmd_arr.append("--save_dir %s" % save_dir)
         model_name = "{}_{}".format(dataset, model_name)
-        cmd_arr.append("--log_file %s/%s.log" % (args.log_dir, model_name))
+        #cmd_arr.append("--log_file %s/%s.log" % (args.log_dir, model_name))
         #cmd_arr.append("&> %s/%s.log \n" % (args.log_dir, model_name))
         cmd = " " .join(cmd_arr)
         #print(cmd)

@@ -80,19 +80,20 @@ class ProductRanker(nn.Module):
             self.user_emb = nn.Embedding(user_size+1, self.embedding_size, padding_idx=self.user_pad_idx)
         if self.args.use_item_emb:
             self.product_emb = nn.Embedding(product_size+1, self.embedding_size, padding_idx=self.prod_pad_idx)
-        if self.fix_emb and args.review_encoder_name == "pvc":
-            #if review embeddings are fixed, just load the aggregated embeddings which include all the words in the review
-            #otherwise the reviews are cut off at review_word_limit
-            self.review_encoder_name = "pv"
 
         if self.pretrain_emb_dir is not None:
-            word_emb_fname = "word_emb.txt.gz" if self.review_encoder_name == "pv" else "context_emb.txt.gz"
+            word_emb_fname = "word_emb.txt.gz" #for query and target words in pv and pvc
             pretrain_word_emb_path = os.path.join(self.pretrain_emb_dir, word_emb_fname)
             pretrained_weights = torch.FloatTensor(load_pretrain_embeddings(pretrain_word_emb_path))
             self.word_embeddings = nn.Embedding.from_pretrained(pretrained_weights)
         else:
             self.word_embeddings = nn.Embedding(
                 vocab_size, self.embedding_size, padding_idx=self.word_pad_idx)
+
+        if self.fix_emb and args.review_encoder_name == "pvc":
+            #if review embeddings are fixed, just load the aggregated embeddings which include all the words in the review
+            #otherwise the reviews are cut off at review_word_limit
+            self.review_encoder_name = "pv"
 
         self.transformer_encoder = TransformerEncoder(
                 self.embedding_size, args.ff_size, args.heads,
@@ -106,8 +107,12 @@ class ProductRanker(nn.Module):
                     self.word_embeddings, self.word_dists,
                     review_count, self.emb_dropout, pretrain_emb_path, fix_emb=self.fix_emb)
         elif self.review_encoder_name == "pvc":
+            pretrain_emb_path = None
+            if self.pretrain_emb_dir is not None:
+                pretrain_emb_path = os.path.join(self.pretrain_emb_dir, "context_emb.txt.gz")
             self.review_encoder = ParagraphVectorCorruption(
-                    self.word_embeddings, self.word_dists, args.corrupt_rate, self.emb_dropout)
+                    self.word_embeddings, self.word_dists, args.corrupt_rate,
+                    self.emb_dropout, pretrain_emb_path, fix_emb=self.fix_emb)
         elif self.review_encoder_name == "fs":
             self.review_encoder = FSEncoder(self.embedding_size, self.emb_dropout)
         else:
@@ -125,7 +130,8 @@ class ProductRanker(nn.Module):
 
         self.review_embeddings = None
         if self.fix_emb:
-            self.word_embeddings.weight.requires_grad = False
+            #self.word_embeddings.weight.requires_grad = False
+            #embeddings of query words need to be update
             #self.emb_dropout = 0
             self.get_review_embeddings() #get model.review_embeddings
 

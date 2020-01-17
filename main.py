@@ -61,13 +61,13 @@ def parse_args():
                             help="The lambda for L2 regularization.")
     parser.add_argument("--batch_size", type=int, default=32,
                             help="Batch size to use during training.")
-    parser.add_argument("--valid_batch_size", type=int, default=16,
+    parser.add_argument("--valid_batch_size", type=int, default=24,
                             help="Batch size for validation to use during training.")
-    parser.add_argument("--valid_candi_size", type=int, default=1000, #
+    parser.add_argument("--valid_candi_size", type=int, default=500, #
                             help="Random products used for validation. When it is 0 or less, all the products are used.")
     parser.add_argument("--test_candi_size", type=int, default=-1, #
                             help="When it is 0 or less, all the products are used. Otherwise, test_candi_size samples from ranklist will be reranked")
-    parser.add_argument("--candi_batch_size", type=int, default=1000,
+    parser.add_argument("--candi_batch_size", type=int, default=500,
                             help="Batch size for validation to use during training.")
     parser.add_argument("--num_workers", type=int, default=4,
                             help="Number of processes to load batches of data during training.")
@@ -194,7 +194,9 @@ def get_product_scores(args):
     trainer.test(args, global_data, test_prod_data, args.rankfname)
 
 def main(args):
-    init_logger(args.log_file)
+    if not os.path.isdir(args.save_dir):
+        os.makedirs(args.save_dir)
+    init_logger(os.path.join(args.save_dir, args.log_file))
     logger.info(args)
     if args.mode == "train":
         train(args)

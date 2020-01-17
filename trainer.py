@@ -38,8 +38,6 @@ class Trainer(object):
         # Set model in training mode.
         #model_dir = "%s/model" % (args.save_dir)
         model_dir = args.save_dir
-        if not os.path.isdir(model_dir):
-            os.makedirs(model_dir)
         valid_dataset = data.ProdSearchDataset(args, global_data, valid_prod_data)
         step_time, loss = 0.,0.
         get_batch_time = 0.0
