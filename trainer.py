@@ -61,6 +61,8 @@ class Trainer(object):
             pbar.set_description("[Epoch {}]".format(current_epoch))
             time_flag = time.time()
             for batch_data_arr in pbar:
+                if batch_data_arr is None:
+                    continue
                 batch_data_arr = [x.to(args.device) for x in batch_data_arr]
                 get_batch_time += time.time() - time_flag
                 time_flag = time.time()

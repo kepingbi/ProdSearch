@@ -36,10 +36,13 @@ class ProdSearchDataset(Dataset):
         self.global_data = global_data
         self.prod_data = prod_data
         if prod_data.set_name == "train":
+            self._data = self.collect_train_samples(self.global_data, self.prod_data)
+            '''
             if self.args.do_seq_review_train:
-                self._data = self.collect_train_samples(self.global_data, self.prod_data)
+                self._data = self.collect_train_samples_seq(self.global_data, self.prod_data)
             else:
                 self._data = self.collect_train_samples_random(self.global_data, self.prod_data)
+            '''
         else:
             self._data = self.collect_test_samples(self.global_data, self.prod_data, args.candi_batch_size)
 
@@ -153,6 +156,17 @@ class ProdSearchDataset(Dataset):
         return train_data
 
     def collect_train_samples(self, global_data, prod_data):
+        #Q, review of u + review of pos i, review of u + review of neg i;
+        #words of pos reviews; words of neg reviews, all if encoder is not pv
+        train_data = []
+        for line_id, review in enumerate(prod_data.review_info):
+            user_idx, prod_idx, review_idx = review
+            query_idx = random.choice(prod_data.product_query_idx[prod_idx])
+            #query_idx = prod_data.review_query_idx[line_id]
+            train_data.append([line_id, query_idx, user_idx, prod_idx, review_idx])
+        return train_data
+
+    def collect_train_samples_seq(self, global_data, prod_data):
         #Q, review of u + review of pos i, review of u + review of neg i;
         #words of pos reviews; words of neg reviews, all if encoder is not pv
         train_data = []

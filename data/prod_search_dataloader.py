@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 import others.util as util
 import numpy as np
+import random
 from data.batch_data import ProdSearchTrainBatch, ProdSearchTestBatch
 
 
@@ -32,11 +33,13 @@ class ProdSearchDataLoader(DataLoader):
         if self.prod_data.set_name == 'train':
             return self.get_train_batch(batch)
         else: #validation or test
-            #return self.get_test_batch(batch)
+            return self.get_test_batch(batch)
+        '''
             if self.args.do_seq_review_test:
                 return self.get_test_batch(batch)
             else:
                 return self.get_test_batch_random(batch)
+        '''
 
     def get_test_batch_random(self, batch):
         query_idxs = [entry[0] for entry in batch]
@@ -108,17 +111,22 @@ class ProdSearchDataLoader(DataLoader):
         candi_seq_item_idxs = []
         #candi_prod_ridxs = [entry[4] for entry in batch]
         #candi_seg_idxs = [entry[5] for entry in batch]
-        for _, user_idx, _, review_idx, candidate_items in batch:
+        for _, user_idx, prod_idx, review_idx, candidate_items in batch:
             #if self.args.train_review_only:
             #    u_prev_review_idxs = self.prod_data.u_reviews[user_idx][:self.args.uprev_review_limit]
             #else:
+            do_seq = self.args.do_seq_review_test and not self.args.train_review_only
+            u_prev_review_idxs = self.get_user_review_idxs(user_idx, review_idx, do_seq, fix=True)
+            i_prev_review_idxs = self.get_item_review_idxs(prod_idx, review_idx, do_seq, fix=True)
             review_time_stamp = self.global_data.review_loc_time[review_idx][2]
+            '''
             loc_in_u = self.global_data.review_loc_time[review_idx][0]
             u_prev_review_idxs = self.global_data.u_r_seq[user_idx][:loc_in_u]
             if self.args.train_review_only:
                 u_prev_review_idxs = [x for x in u_prev_review_idxs if x in self.prod_data.u_reviews[user_idx]]
             #u_prev_review_idxs = self.global_data.u_r_seq[user_idx][max(0,loc_in_u-self.args.uprev_review_limit):loc_in_u]
             u_prev_review_idxs = u_prev_review_idxs[-self.args.uprev_review_limit:]
+            '''
             u_item_idxs = [self.global_data.review_u_p[x][1] for x in u_prev_review_idxs]
 
             candi_batch_item_idxs = []
@@ -129,6 +137,9 @@ class ProdSearchDataLoader(DataLoader):
                 #if self.args.train_review_only:
                 #    candi_i_prev_review_idxs = self.prod_data.p_reviews[candi_i][:self.args.iprev_review_limit]
                 #else:
+                candi_i_prev_review_idxs = self.get_item_review_idxs(
+                        candi_i, None, do_seq, review_time_stamp, fix=True)
+                '''
                 loc_in_candi_i = self.dataset.bisect_right(
                         self.global_data.i_r_seq[candi_i], self.global_data.review_loc_time, review_time_stamp)
                 candi_i_prev_review_idxs = self.global_data.i_r_seq[candi_i][:loc_in_candi_i]
@@ -136,6 +147,7 @@ class ProdSearchDataLoader(DataLoader):
                     candi_i_prev_review_idxs = [x for x in candi_i_prev_review_idxs if x in self.prod_data.p_reviews[candi_i]]
                 candi_i_prev_review_idxs = self.global_data.i_r_seq[candi_i][-self.args.iprev_review_limit:]
                 #candi_i_prev_review_idxs = self.global_data.i_r_seq[candi_i][max(0,loc_in_candi_i-self.args.iprev_review_limit):loc_in_candi_i]
+                '''
                 candi_i_user_idxs = [self.global_data.review_u_p[x][0] for x in candi_i_prev_review_idxs]
                 cur_candi_i_user_idxs =  [self.user_pad_idx] + [user_idx] * len(u_prev_review_idxs) + candi_i_user_idxs
                 cur_candi_i_user_idxs = cur_candi_i_user_idxs[:self.total_review_limit+1]
@@ -171,6 +183,109 @@ class ProdSearchDataLoader(DataLoader):
                 candi_seq_user_idxs, candi_seq_item_idxs)
         return batch
 
+    def get_item_review_idxs(self, prod_idx, review_idx, do_seq, review_time_stamp=None,fix=True):
+        if do_seq:
+            if review_idx is None:
+                loc_in_i = self.dataset.bisect_right(
+                        self.global_data.i_r_seq[prod_idx], self.global_data.review_loc_time, review_time_stamp)
+            else:
+                loc_in_i = self.global_data.review_loc_time[review_idx][1]
+            if loc_in_i == 0:
+                return []
+            i_prev_review_idxs = self.global_data.i_r_seq[prod_idx][:loc_in_i]
+            i_prev_review_idxs = self.global_data.i_r_seq[prod_idx][-self.args.iprev_review_limit:]
+            #i_prev_review_idxs = self.global_data.i_r_seq[prod_idx][max(0,loc_in_i-self.args.iprev_review_limit):loc_in_i]
+
+        else:
+            i_prev_review_idxs = self.prod_data.p_reviews[prod_idx]
+            if len(i_prev_review_idxs) > self.args.iprev_review_limit:
+                if fix:
+                    i_prev_review_idxs = i_prev_review_idxs[:self.args.iprev_review_limit]
+                    #i_prev_review_idxs = i_prev_review_idxs[-self.args.iprev_review_limit:]
+                else:
+                    i_prev_review_idxs = random.sample(i_prev_review_idxs, self.args.iprev_review_limit)
+
+        return i_prev_review_idxs
+
+    def get_user_review_idxs(self, user_idx, review_idx, do_seq, fix=True):
+        if do_seq:
+            loc_in_u = self.global_data.review_loc_time[review_idx][0]
+            u_prev_review_idxs = self.global_data.u_r_seq[user_idx][:loc_in_u]
+            u_prev_review_idxs = self.global_data.u_r_seq[user_idx][-self.args.uprev_review_limit:]
+            #u_prev_review_idxs = self.global_data.u_r_seq[user_idx][max(0,loc_in_u-self.uprev_review_limit):loc_in_u]
+        else:
+            u_prev_review_idxs = self.prod_data.u_reviews[user_idx]
+            if len(u_prev_review_idxs) > self.args.uprev_review_limit:
+                if fix:
+                    u_prev_review_idxs = u_prev_review_idxs[:self.args.uprev_review_limit]
+                    #u_prev_review_idxs = u_prev_review_idxs[-self.args.uprev_review_limit:]
+                else:
+                    u_prev_review_idxs = random.sample(u_prev_review_idxs, self.args.uprev_review_limit)
+        return u_prev_review_idxs
+
+    def prepare_train_batch(self, batch):
+        batch_query_word_idxs = []
+        batch_pos_prod_ridxs, batch_pos_seg_idxs, batch_pos_user_idxs, batch_pos_item_idxs = [],[],[],[]
+        batch_neg_prod_ridxs, batch_neg_seg_idxs, batch_neg_user_idxs, batch_neg_item_idxs = [],[],[],[]
+        for line_id, query_idx, user_idx, prod_idx, review_idx in batch:
+            query_word_idxs = self.global_data.query_words[query_idx]
+            u_prev_review_idxs = self.get_user_review_idxs(user_idx, review_idx, self.args.do_seq_review_train, fix=False)
+            i_prev_review_idxs = self.get_item_review_idxs(prod_idx, review_idx, self.args.do_seq_review_train, fix=False)
+            review_time_stamp = self.global_data.review_loc_time[review_idx][2]
+            if len(i_prev_review_idxs) == 0:
+                continue
+            i_user_idxs = [self.global_data.review_u_p[x][0] for x in i_prev_review_idxs]
+            u_item_idxs = [self.global_data.review_u_p[x][1] for x in u_prev_review_idxs]
+            pos_user_idxs =  [self.user_pad_idx] + [user_idx] * len(u_prev_review_idxs) + i_user_idxs
+            pos_user_idxs = pos_user_idxs[:self.total_review_limit + 1]
+            pos_item_idxs =  [self.prod_pad_idx] + u_item_idxs + [prod_idx] * len(i_prev_review_idxs)
+            pos_item_idxs = pos_item_idxs[:self.total_review_limit + 1]
+            pos_seg_idxs = [0] + [1] * len(u_prev_review_idxs) + [2] * len(i_prev_review_idxs)
+            pos_seg_idxs = pos_seg_idxs[:self.total_review_limit + 1]
+            pos_prod_ridxs = u_prev_review_idxs + i_prev_review_idxs
+            pos_prod_ridxs = pos_prod_ridxs[:self.total_review_limit] # or select reviews with the most words
+
+            neg_prod_idxs = self.prod_data.neg_sample_products[line_id] #neg_per_pos
+            neg_prod_ridxs = []
+            neg_seg_idxs = []
+            neg_user_idxs = []
+            neg_item_idxs = []
+            for neg_i in neg_prod_idxs:
+                neg_i_prev_review_idxs = self.get_item_review_idxs(
+                        neg_i, None, self.args.do_seq_review_train, review_time_stamp, fix=False)
+                if len(neg_i_prev_review_idxs) == 0:
+                    continue
+                neg_i_user_idxs = [self.global_data.review_u_p[x][0] for x in neg_i_prev_review_idxs]
+                cur_neg_i_user_idxs =  [self.user_pad_idx] + [user_idx] * len(u_prev_review_idxs) + neg_i_user_idxs
+                cur_neg_i_user_idxs = cur_neg_i_user_idxs[:self.total_review_limit+1]
+                cur_neg_i_item_idxs =  [self.prod_pad_idx] + u_item_idxs + [neg_i] * len(neg_i_prev_review_idxs)
+                cur_neg_i_item_idxs = cur_neg_i_item_idxs[:self.total_review_limit+1]
+                cur_neg_i_masks = [0] + [1] * len(u_prev_review_idxs) + [2] * len(neg_i_prev_review_idxs)
+                cur_neg_i_masks = cur_neg_i_masks[:self.total_review_limit+1]
+                cur_neg_i_review_idxs = u_prev_review_idxs + neg_i_prev_review_idxs
+                cur_neg_i_review_idxs = cur_neg_i_review_idxs[:self.total_review_limit]
+                neg_user_idxs.append(cur_neg_i_user_idxs)
+                neg_item_idxs.append(cur_neg_i_item_idxs)
+                neg_seg_idxs.append(cur_neg_i_masks)
+                neg_prod_ridxs.append(cur_neg_i_review_idxs)
+                #neg_prod_rword_idxs.append([self.global_data.review_words[x] for x in cur_neg_i_review_idxs])
+            if len(neg_prod_ridxs) == 0:
+                #all the neg prod do not have available reviews
+                continue
+            batch_query_word_idxs.append(query_word_idxs)
+            batch_pos_prod_ridxs.append(pos_prod_ridxs)
+            batch_pos_seg_idxs.append(pos_seg_idxs)
+            batch_pos_user_idxs.append(pos_user_idxs)
+            batch_pos_item_idxs.append(pos_item_idxs)
+            batch_neg_prod_ridxs.append(neg_prod_ridxs)
+            batch_neg_seg_idxs.append(neg_seg_idxs)
+            batch_neg_user_idxs.append(neg_user_idxs)
+            batch_neg_item_idxs.append(neg_item_idxs)
+
+        data_batch = [batch_query_word_idxs, batch_pos_prod_ridxs, batch_pos_seg_idxs,
+                batch_neg_prod_ridxs, batch_neg_seg_idxs, batch_pos_user_idxs,
+                batch_neg_user_idxs, batch_pos_item_idxs, batch_neg_item_idxs]
+        return data_batch
     '''
     u, Q, i (positive, negative)
     Q; ru1,ru2,ri1,ri2 and k negative (ru1,ru2,rn1i1,rn1i2; ru1,ru2,rnji1,rnji2)
@@ -184,6 +299,13 @@ class ProdSearchDataLoader(DataLoader):
     batch_size, neg_k, review_count (u+i), max_word_count_per_review
     '''
     def get_train_batch(self, batch):
+        query_word_idxs, pos_prod_ridxs, pos_seg_idxs, \
+                neg_prod_ridxs, neg_seg_idxs, pos_user_idxs, \
+                neg_user_idxs, pos_item_idxs, neg_item_idxs = self.prepare_train_batch(batch)
+        if len(query_word_idxs) == 0:
+            print("0 available instance in the batch")
+            return None
+        '''
         query_idxs = [entry[0] for entry in batch]
         query_word_idxs = [self.global_data.query_words[x] for x in query_idxs]
         pos_prod_ridxs = [entry[1] for entry in batch]
@@ -196,7 +318,7 @@ class ProdSearchDataLoader(DataLoader):
         neg_user_idxs = [entry[6] for entry in batch]
         pos_item_idxs = [entry[7] for entry in batch]
         neg_item_idxs = [entry[8] for entry in batch]
-
+        '''
         pos_prod_ridxs = util.pad(pos_prod_ridxs, pad_id = self.review_pad_idx) #pad reviews
         pos_seg_idxs = util.pad(pos_seg_idxs, pad_id = self.seg_pad_idx)
         pos_user_idxs = util.pad(pos_user_idxs, pad_id = self.user_pad_idx)

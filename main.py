@@ -26,7 +26,6 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', default=666, type=int)
     parser.add_argument("--train_from", default='')
-    parser.add_argument("--test_from", default='')
     parser.add_argument("--pretrain_emb_dir", default='')
     parser.add_argument("--do_seq_review_train", type=str2bool, nargs='?',const=True,default=False,
             help="only use reviews before current purchase for training; ")
