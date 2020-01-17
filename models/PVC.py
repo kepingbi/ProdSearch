@@ -8,19 +8,28 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from models.text_encoder import get_vector_mean
+from others.util import load_pretrain_embeddings
 
 import argparse
 
 class ParagraphVectorCorruption(nn.Module):
-    def __init__(self, word_embeddings, word_dists, corrupt_rate, dropout=0.0):
+    def __init__(self, word_embeddings, word_dists, corrupt_rate,
+            dropout=0.0, pretrain_emb_path=None, fix_emb=False):
         super(ParagraphVectorCorruption, self).__init__()
         self.word_embeddings = word_embeddings
         self.word_dists = word_dists
         self._embedding_size = self.word_embeddings.weight.size()[-1]
         vocab_size = self.word_embeddings.weight.size()[0]
         self.word_pad_idx = vocab_size - 1
-        self.target_word_embeddings = nn.Embedding(
-            vocab_size, self._embedding_size, padding_idx=self.word_pad_idx)
+        if pretrain_emb_path is not None:
+            pretrained_weights = torch.FloatTensor(load_pretrain_embeddings(pretrain_emb_path))
+            self.context_embeddings = nn.Embedding.from_pretrained(pretrained_weights)
+        else:
+            self.context_embeddings = nn.Embedding(
+                vocab_size, self._embedding_size, padding_idx=self.word_pad_idx)
+        if fix_emb:
+            self.context_embeddings.weight.requires_grad = False
+            self.dropout_ = 0
         self.corrupt_rate = corrupt_rate
         self.dropout_ = dropout
         self.bce_logits_loss = torch.nn.BCEWithLogitsLoss(reduction='none')#by default it's mean
@@ -41,7 +50,7 @@ class ParagraphVectorCorruption(nn.Module):
         return inputs
 
     def get_para_vector(self, prod_rword_idxs_pvc):
-        pvc_word_emb = self.word_embeddings(prod_rword_idxs_pvc)
+        pvc_word_emb = self.context_embeddings(prod_rword_idxs_pvc)
         review_emb = get_vector_mean(pvc_word_emb, prod_rword_idxs_pvc.ne(self.word_pad_idx))
         return review_emb
 
@@ -52,7 +61,7 @@ class ParagraphVectorCorruption(nn.Module):
             review_word_mask: indicate which target is valid
         '''
         batch_size, pv_window_size, embedding_size = review_word_emb.size()
-        pvc_word_emb = self.word_embeddings(prod_rword_idxs_pvc)
+        pvc_word_emb = self.context_embeddings(prod_rword_idxs_pvc)
         review_emb = get_vector_mean(pvc_word_emb, prod_rword_idxs_pvc.ne(self.word_pad_idx))
         self.apply_token_dropout(pvc_word_emb, self.corrupt_rate)
         corr_review_emb = get_vector_mean(pvc_word_emb, prod_rword_idxs_pvc.ne(self.word_pad_idx))
