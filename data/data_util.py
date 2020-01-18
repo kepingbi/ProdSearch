@@ -34,13 +34,16 @@ class ProdSearchData():
             self.review_info = global_data.train_review_info
             self.review_query_idx = global_data.train_query_idxs
         else:
+            read_set_name = self.set_name
+            if not self.args.has_valid: #if there is no validation set, use test as validation
+                read_set_name = 'test'
             self.product_query_idx = GlobalProdSearchData.read_arr_from_lines(
                      "{}/test_query_idx.txt.gz".format(input_train_dir)) #validation and test have same set of queries
             self.review_info, self.review_query_idx = GlobalProdSearchData.read_review_id(
-                    "{}/{}_id.txt.gz".format(input_train_dir, set_name),
+                    "{}/{}_id.txt.gz".format(input_train_dir, read_set_name),
                     global_data.line_review_id_map)
 
-            franklist = '{}/{}.bias_product.ranklist'.format(input_train_dir, set_name)
+            franklist = '{}/{}.bias_product.ranklist'.format(input_train_dir, read_set_name)
             #franklist = '{}/test.bias_product.ranklist'.format(input_train_dir)
             if args.test_candi_size > 0 and os.path.exists(franklist): #otherwise use all the product ids
                 self.uq_pids = self.read_ranklist(franklist, global_data.product_asin2ids)
@@ -71,7 +74,7 @@ class ProdSearchData():
     def get_u_i_reviews(self, user_size, product_size, review_info):
         u_reviews = [[] for i in range(self.user_size)]
         p_reviews = [[] for i in range(self.product_size)]
-        for u_idx, p_idx, r_idx in review_info:
+        for _, u_idx, p_idx, r_idx in review_info:
             u_reviews[u_idx].append(r_idx)
             p_reviews[p_idx].append(r_idx)
         return u_reviews, p_reviews
@@ -79,7 +82,7 @@ class ProdSearchData():
     def get_u_i_reviews_set(self, user_size, product_size, review_info):
         u_reviews = [set() for i in range(self.user_size)]
         p_reviews = [set() for i in range(self.product_size)]
-        for u_idx, p_idx, r_idx in review_info:
+        for _, u_idx, p_idx, r_idx in review_info:
             u_reviews[u_idx].add(r_idx)
             p_reviews[p_idx].add(r_idx)
         return u_reviews, p_reviews
@@ -92,7 +95,7 @@ class ProdSearchData():
 
     def collect_product_distribute(self, review_info):
         product_distribute = np.zeros(self.product_size)
-        for uid, pid, _ in review_info:
+        for _, uid, pid, _ in review_info:
             product_distribute[pid] += 1
         return product_distribute
 
@@ -158,9 +161,10 @@ class GlobalProdSearchData():
         self.review_words.append([self.word_pad_idx]) # * args.review_word_limit)
         #so that review_words[-1] = -1, ..., -1
         self.review_words = util.pad(self.review_words, pad_id=self.vocab_size-1, width=args.review_word_limit)
-        self.u_r_seq = self.read_arr_from_lines("{}/u_r_seq.txt.gz".format(data_path)) #list of review ids
-        self.i_r_seq = self.read_arr_from_lines("{}/p_r_seq.txt.gz".format(data_path)) #list of review ids
-        self.review_loc_time = self.read_arr_from_lines("{}/review_uloc_ploc_and_time.txt.gz".format(data_path)) #(loc_in_u, loc_in_i, time) of each review
+        if args.do_seq_review_train or args.do_seq_review_test:
+            self.u_r_seq = self.read_arr_from_lines("{}/u_r_seq.txt.gz".format(data_path)) #list of review ids
+            self.i_r_seq = self.read_arr_from_lines("{}/p_r_seq.txt.gz".format(data_path)) #list of review ids
+            self.review_loc_time = self.read_arr_from_lines("{}/review_uloc_ploc_and_time.txt.gz".format(data_path)) #(loc_in_u, loc_in_i, time) of each review
         self.line_review_id_map = self.read_review_id_line_map("{}/review_id.txt.gz".format(data_path))
         self.train_review_info, self.train_query_idxs = self.read_review_id(
                 "{}/train_id.txt.gz".format(input_train_dir), self.line_review_id_map)
@@ -194,12 +198,14 @@ class GlobalProdSearchData():
         query_ids = []
         review_info = []
         with gzip.open(fname, 'rt') as fin:
+            line_no = 0
             for line in fin:
                 arr = line.strip().split('\t')
                 review_id = line_review_id_map[int(arr[2].split('_')[-1])]
-                review_info.append((int(arr[0]), int(arr[1]), review_id))#(user_idx, product_idx)
+                review_info.append((line_no, int(arr[0]), int(arr[1]), review_id))#(user_idx, product_idx)
                 if arr[-1].isdigit():
                     query_ids.append(int(arr[-1]))
+                line_no += 1
                 #if there is no query idx afer review_id, query_ids will be illegal and not used
         return review_info, query_ids
 

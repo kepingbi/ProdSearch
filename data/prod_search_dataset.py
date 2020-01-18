@@ -52,11 +52,11 @@ class ProdSearchDataset(Dataset):
         #words of pos reviews; words of neg reviews, all if encoder is not pv
         test_data = []
         uq_set = set()
-        for line_id, review in enumerate(prod_data.review_info):
-            if (line_id+1) % 1000 == 0:
+        for line_id, user_idx, prod_idx, review_idx in prod_data.review_info:
+            if (line_id+1) % 10000 == 0:
                 progress = (line_id+1.) / len(prod_data.review_info) * 100
                 print("{}% data processed".format(progress))
-            user_idx, prod_idx, review_idx = review
+            #user_idx, prod_idx, review_idx = review
             #query_idx = prod_data.review_query_idx[line_id]
             query_idxs = prod_data.product_query_idx[prod_idx]
             for query_idx in query_idxs:
@@ -93,11 +93,11 @@ class ProdSearchDataset(Dataset):
         #Q, review of u + review of pos i, review of u + review of neg i;
         #words of pos reviews; words of neg reviews, all if encoder is not pv
         train_data = []
-        for line_id, review in enumerate(prod_data.review_info):
+        for line_id, user_idx, prod_idx, review_idx in prod_data.review_info:
             if (line_id+1) % 20000 == 0:
                 progress = (line_id+1.) / len(prod_data.review_info) * 100
                 print("{}% data processed".format(progress))
-            user_idx, prod_idx, review_idx = review
+            #user_idx, prod_idx, review_idx = review
             query_idx = random.choice(prod_data.product_query_idx[prod_idx])
             #query_idx = prod_data.review_query_idx[line_id]
             #query_word_idxs = global_data.query_words[query_idx]
@@ -158,6 +158,7 @@ class ProdSearchDataset(Dataset):
     def collect_train_samples(self, global_data, prod_data):
         #Q, review of u + review of pos i, review of u + review of neg i;
         #words of pos reviews; words of neg reviews, all if encoder is not pv
+        '''
         train_data = []
         for line_id, review in enumerate(prod_data.review_info):
             user_idx, prod_idx, review_idx = review
@@ -165,16 +166,18 @@ class ProdSearchDataset(Dataset):
             #query_idx = prod_data.review_query_idx[line_id]
             train_data.append([line_id, query_idx, user_idx, prod_idx, review_idx])
         return train_data
+        '''
+        return prod_data.review_info
 
     def collect_train_samples_seq(self, global_data, prod_data):
         #Q, review of u + review of pos i, review of u + review of neg i;
         #words of pos reviews; words of neg reviews, all if encoder is not pv
         train_data = []
-        for line_id, review in enumerate(prod_data.review_info):
+        for line_id, user_idx, prod_idx, review_idx in prod_data.review_info:
             if (line_id+1) % 20000 == 0:
                 progress = (line_id+1.) / len(prod_data.review_info) * 100
                 print("{}% data processed".format(progress))
-            user_idx, prod_idx, review_idx = review
+            #user_idx, prod_idx, review_idx = review
             #query_idx = random.choice(prod_data.product_query_idx[prod_idx])
             query_idx = prod_data.review_query_idx[line_id]
             #query_word_idxs = global_data.query_words[query_idx]

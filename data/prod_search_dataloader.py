@@ -118,7 +118,9 @@ class ProdSearchDataLoader(DataLoader):
             do_seq = self.args.do_seq_review_test and not self.args.train_review_only
             u_prev_review_idxs = self.get_user_review_idxs(user_idx, review_idx, do_seq, fix=True)
             i_prev_review_idxs = self.get_item_review_idxs(prod_idx, review_idx, do_seq, fix=True)
-            review_time_stamp = self.global_data.review_loc_time[review_idx][2]
+            review_time_stamp = None
+            if self.args.do_seq_review_test:
+                review_time_stamp = self.global_data.review_loc_time[review_idx][2]
             '''
             loc_in_u = self.global_data.review_loc_time[review_idx][0]
             u_prev_review_idxs = self.global_data.u_r_seq[user_idx][:loc_in_u]
@@ -227,11 +229,14 @@ class ProdSearchDataLoader(DataLoader):
         batch_query_word_idxs = []
         batch_pos_prod_ridxs, batch_pos_seg_idxs, batch_pos_user_idxs, batch_pos_item_idxs = [],[],[],[]
         batch_neg_prod_ridxs, batch_neg_seg_idxs, batch_neg_user_idxs, batch_neg_item_idxs = [],[],[],[]
-        for line_id, query_idx, user_idx, prod_idx, review_idx in batch:
+        for line_id, user_idx, prod_idx, review_idx in batch:
+            query_idx = random.choice(self.prod_data.product_query_idx[prod_idx])
             query_word_idxs = self.global_data.query_words[query_idx]
             u_prev_review_idxs = self.get_user_review_idxs(user_idx, review_idx, self.args.do_seq_review_train, fix=False)
             i_prev_review_idxs = self.get_item_review_idxs(prod_idx, review_idx, self.args.do_seq_review_train, fix=False)
-            review_time_stamp = self.global_data.review_loc_time[review_idx][2]
+            review_time_stamp = None
+            if self.args.do_seq_review_train:
+                review_time_stamp = self.global_data.review_loc_time[review_idx][2]
             if len(i_prev_review_idxs) == 0:
                 continue
             i_user_idxs = [self.global_data.review_u_p[x][0] for x in i_prev_review_idxs]

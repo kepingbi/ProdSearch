@@ -60,6 +60,8 @@ def parse_args():
                             help="The lambda for L2 regularization.")
     parser.add_argument("--batch_size", type=int, default=32,
                             help="Batch size to use during training.")
+    parser.add_argument("--has_valid", type=str2bool, nargs='?',const=True,default=True,
+            help="whether there is validation set; if not use test as validation.")
     parser.add_argument("--valid_batch_size", type=int, default=24,
                             help="Batch size for validation to use during training.")
     parser.add_argument("--valid_candi_size", type=int, default=500, #
