@@ -30,8 +30,8 @@ script_path = "python main.py"
 #CONST_CMD = " ".join(["--{} {}".format(x[0], x[1]) for x in CONST_CMD_ARR])
 pretrain_pv_root_dir = "/mnt/nfs/scratch1/kbi/review_transformer/working/paragraph_embeddings/reviews_##_5.json.gz.stem.nostop/min_count5/"
 pv_path = "batch_size256.negative_sample5.learning_rate0.5.embed_size128.steps_per_checkpoint400.max_train_epoch20.L2_lambda0.0.net_structpv_hdc./"
-#small_pvc_path = "batch_size256.negative_sample5.learning_rate0.5.embed_size128.use_local_contextTrue.steps_per_checkpoint400.max_train_epoch20.L2_lambda0.0.net_structcdv_hdc."
-small_pvc_path = "batch_size256.negative_sample5.learning_rate0.5.embed_size128.subsampling_rate1e-05.use_local_contextTrue.steps_per_checkpoint400.max_train_epoch20.L2_lambda0.0.net_structcdv_hdc."
+small_pvc_path = "batch_size256.negative_sample5.learning_rate0.5.embed_size128.use_local_contextTrue.steps_per_checkpoint400.max_train_epoch20.L2_lambda0.0.net_structcdv_hdc."
+#small_pvc_path = "batch_size256.negative_sample5.learning_rate0.5.embed_size128.subsampling_rate1e-05.use_local_contextTrue.steps_per_checkpoint400.max_train_epoch20.L2_lambda0.0.net_structcdv_hdc."
 large_pvc_path = "batch_size512.negative_sample5.learning_rate0.5.embed_size128.subsampling_rate1e-06.use_local_contextTrue.steps_per_checkpoint400.max_train_epoch20.L2_lambda0.0.net_structcdv_hdc." #subsampling_rate can be 1e-5,1e-6,1e-7
 
 #pretrain_pv_emb_dir = "/mnt/nfs/scratch1/kbi/review_transformer/working/paragraph_embeddings/reviews_##_5.json.gz.stem.nostop/min_count5/batch_size256.negative_sample5.learning_rate0.5.embed_size128.steps_per_checkpoint400.max_train_epoch20.L2_lambda0.0.net_structpv_hdc."
@@ -44,8 +44,26 @@ short_names = ['pretrain', 'enc', 'me', 'lr', 'ws', 'bs', 'vcs', 'ebs', \
                 'rwl', 'irl', 'drop', 'prodneg', 'fixemb', 'poswt', 'lambda', 'ff', 'ly', 'ue', 'ie']
 
 paras = [
-        ('Cell_Phones_and_Accessories', 'pvc', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
-        ('Cell_Phones_and_Accessories', 'pvc', 'pvc', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        ('CDs_and_Vinyl', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
+
+        #('Clothing_Shoes_and_Jewelry', None, 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 50, 0.01, 15000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
+
+        #('Sports_and_Outdoors', None, 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        #('Sports_and_Outdoors', 'pv', 'fs', 50, 0.01, 15000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        #('Sports_and_Outdoors', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
+
+        #('Electronics', None, 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        #('Electronics', 'pv', 'fs', 50, 0.01, 15000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        #('Electronics', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
+
+        #('Movies_and_TV', None, 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        #('Movies_and_TV', 'pv', 'fs', 50, 0.01, 15000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        #('Movies_and_TV', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
+
+        #('Cell_Phones_and_Accessories', 'pvc', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        #('Cell_Phones_and_Accessories', 'pvc', 'pvc', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
         #('Cell_Phones_and_Accessories', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
         #('Cell_Phones_and_Accessories', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
         #('Cell_Phones_and_Accessories', 'pvc', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
@@ -139,7 +157,6 @@ paras = [
 
         #('Kindle_Store', 'pv', 10, 2, 3000, 32, 1000, 128, 100, 30, 0.1, 0.9),
         #('Kindle_Store', 'pvc', 10, 2, 3000, 32, 1000, 128, 100, 30, 0.1, 0.9),
-
         ]
 
 if __name__ == '__main__':
@@ -155,6 +172,8 @@ if __name__ == '__main__':
         cmd_arr = []
         cmd_arr.append(script_path)
         dataset = para[0]
+        os.system("mkdir -p log/{}".format(dataset))
+
         if para[1] == 'pv':
             pretrain_emb_dir = os.path.join(pretrain_pv_root_dir.replace('##', dataset), pv_path)
         elif para[1] == 'pvc':
@@ -187,8 +206,8 @@ if __name__ == '__main__':
         with open(fname, 'w') as fout:
             fout.write(config_str)
             fout.write("#SBATCH --job-name=%d.sh\n" % job_id)
-            fout.write("#SBATCH --output=log/%s.txt\n" % model_name)
-            fout.write("#SBATCH -e log/%s.err.txt\n" % model_name)
+            fout.write("#SBATCH --output=log/%s/%s.txt\n" % (dataset, model_name))
+            fout.write("#SBATCH -e log/%s/%s.err.txt\n" % (dataset, model_name))
             fout.write("\n")
             fout.write(cmd)
             fout.write("\n\n")

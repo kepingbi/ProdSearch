@@ -14,16 +14,19 @@ import argparse
 
 class ParagraphVectorCorruption(nn.Module):
     def __init__(self, word_embeddings, word_dists, corrupt_rate,
-            dropout=0.0, pretrain_emb_path=None, fix_emb=False):
+            dropout=0.0, pretrain_emb_path=None, vocab_words=None, fix_emb=False):
         super(ParagraphVectorCorruption, self).__init__()
         self.word_embeddings = word_embeddings
         self.word_dists = word_dists
         self._embedding_size = self.word_embeddings.weight.size()[-1]
         vocab_size = self.word_embeddings.weight.size()[0]
         self.word_pad_idx = vocab_size - 1
-        if pretrain_emb_path is not None:
-            pretrained_weights = torch.FloatTensor(load_pretrain_embeddings(pretrain_emb_path))
-            self.context_embeddings = nn.Embedding.from_pretrained(pretrained_weights)
+        if pretrain_emb_path is not None and vocab_words is not None:
+            word_index_dic, pretrained_weights = load_pretrain_embeddings(pretrain_word_emb_path)
+            word_indices = torch.tensor([0] + [word_index_dic[x] for x in vocab_words[1:]])
+            pretrained_weights = torch.FloatTensor(pretrained_weights)
+
+            self.context_embeddings = nn.Embedding.from_pretrained(pretrained_weights[word_indices])
         else:
             self.context_embeddings = nn.Embedding(
                 vocab_size, self._embedding_size, padding_idx=self.word_pad_idx)

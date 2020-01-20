@@ -15,7 +15,7 @@ from models.text_encoder import AVGEncoder, FSEncoder
 from models.transformer import TransformerEncoder
 from models.optimizers import Optimizer
 from others.logging import logger
-from others.util import pad, load_pretrain_embeddings
+from others.util import pad, load_pretrain_embeddings, load_user_item_embeddings
 
 def build_optim(args, model, checkpoint):
     """ Build optimizer """
@@ -53,12 +53,13 @@ def build_optim(args, model, checkpoint):
 class ProductRanker(nn.Module):
     def __init__(self, args, device, vocab_size, review_count,
             product_size, user_size,
-            padded_review_words, word_dists=None):
+            padded_review_words, vocab_words, word_dists=None):
         super(ProductRanker, self).__init__()
         self.args = args
         self.device = device
         self.train_review_only = args.train_review_only
         self.embedding_size = args.embedding_size
+        self.vocab_words = vocab_words
         self.word_dists = None
         if word_dists is not None:
             self.word_dists = torch.tensor(word_dists, device=device)
@@ -74,18 +75,38 @@ class ProductRanker(nn.Module):
         self.pretrain_emb_dir = None
         if os.path.exists(args.pretrain_emb_dir):
             self.pretrain_emb_dir = args.pretrain_emb_dir
+        self.pretrain_up_emb_dir = None
+        if os.path.exists(args.pretrain_up_emb_dir):
+            self.pretrain_up_emb_dir = args.pretrain_up_emb_dir
         self.dropout_layer = nn.Dropout(p=args.dropout)
 
         if self.args.use_user_emb:
-            self.user_emb = nn.Embedding(user_size+1, self.embedding_size, padding_idx=self.user_pad_idx)
+            if self.pretrain_up_emb_dir is None:
+                self.user_emb = nn.Embedding(user_size+1, self.embedding_size, padding_idx=self.user_pad_idx)
+            else:
+                pretrain_user_emb_path = os.path.join(self.pretrain_up_emb_dir, "user_emb.txt")
+                pretrained_weights = load_user_item_embeddings(pretrain_user_emb_path)
+                pretrained_weights.append([0.] * len(pretrained_weights[0]))
+                assert len(pretrained_weights[0]) == self.embedding_size
+                self.user_emb = nn.Embedding.from_pretrained(torch.FloatTensor(pretrained_weights))
+
         if self.args.use_item_emb:
-            self.product_emb = nn.Embedding(product_size+1, self.embedding_size, padding_idx=self.prod_pad_idx)
+            if self.pretrain_emb_dir is None:
+                self.product_emb = nn.Embedding(product_size+1, self.embedding_size, padding_idx=self.prod_pad_idx)
+            else:
+                pretrain_product_emb_path = os.path.join(self.pretrain_up_emb_dir, "product_emb.txt")
+                pretrained_weights = load_user_item_embeddings(pretrain_product_emb_path)
+                pretrained_weights.append([0.] * len(pretrained_weights[0]))
+                self.product_emb = nn.Embedding.from_pretrained(torch.FloatTensor(pretrained_weights))
 
         if self.pretrain_emb_dir is not None:
             word_emb_fname = "word_emb.txt.gz" #for query and target words in pv and pvc
             pretrain_word_emb_path = os.path.join(self.pretrain_emb_dir, word_emb_fname)
-            pretrained_weights = torch.FloatTensor(load_pretrain_embeddings(pretrain_word_emb_path))
-            self.word_embeddings = nn.Embedding.from_pretrained(pretrained_weights)
+            word_index_dic, pretrained_weights = load_pretrain_embeddings(pretrain_word_emb_path)
+            word_indices = torch.tensor([0] + [word_index_dic[x] for x in self.vocab_words[1:]])
+            pretrained_weights = torch.FloatTensor(pretrained_weights)
+
+            self.word_embeddings = nn.Embedding.from_pretrained(pretrained_weights[word_indices])
         else:
             self.word_embeddings = nn.Embedding(
                 vocab_size, self.embedding_size, padding_idx=self.word_pad_idx)
@@ -112,7 +133,7 @@ class ProductRanker(nn.Module):
                 pretrain_emb_path = os.path.join(self.pretrain_emb_dir, "context_emb.txt.gz")
             self.review_encoder = ParagraphVectorCorruption(
                     self.word_embeddings, self.word_dists, args.corrupt_rate,
-                    self.emb_dropout, pretrain_emb_path, fix_emb=self.fix_emb)
+                    self.emb_dropout, pretrain_emb_path, self.vocab_words, fix_emb=self.fix_emb)
         elif self.review_encoder_name == "fs":
             self.review_encoder = FSEncoder(self.embedding_size, self.emb_dropout)
         else:

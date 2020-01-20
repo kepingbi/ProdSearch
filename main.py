@@ -26,7 +26,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', default=666, type=int)
     parser.add_argument("--train_from", default='')
-    parser.add_argument("--pretrain_emb_dir", default='')
+    parser.add_argument("--pretrain_emb_dir", default='', help="pretrained paragraph and word embeddings")
+    parser.add_argument("--pretrain_up_emb_dir", default='', help="pretrained user item embeddings")
     parser.add_argument("--do_seq_review_train", type=str2bool, nargs='?',const=True,default=False,
             help="only use reviews before current purchase for training; ")
     parser.add_argument("--do_seq_review_test", type=str2bool, nargs='?',const=True,default=False,
@@ -122,7 +123,7 @@ def create_model(args, global_data, prod_data, load_path=''):
     """Create translation model and initialize or load parameters in session."""
     model = ProductRanker(args, args.device, global_data.vocab_size,
             global_data.review_count, global_data.product_size, global_data.user_size,
-            global_data.review_words, word_dists=prod_data.word_dists)
+            global_data.review_words, global_data.words, word_dists=prod_data.word_dists)
     if load_path != '':
         logger.info('Loading checkpoint from %s' % load_path)
         checkpoint = torch.load(load_path,

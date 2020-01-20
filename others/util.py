@@ -3,12 +3,30 @@ from others.logging import logger
 
 def load_pretrain_embeddings(fname):
     embeddings = []
+    word_index_dic = []
     with gzip.open(fname, 'rt') as fin:
         count = int(fin.readline().strip())
         emb_size = int(fin.readline().strip())
+        line_no = 0
         for line in fin:
             arr = line.strip(' ').split('\t')#the first element is empty
+            word_index_dic[arr[0]] = line_no
+            line_no += 1
             vector = arr[1].split()
+            vector = [float(x) for x in vector]
+            embeddings.append(vector)
+    logger.info("Loading {}".format(fname))
+    logger.info("Count:{} Embeddings size:{}".format(len(embeddings), len(embeddings[0])))
+    return word_index_dic, embeddings
+
+def load_user_item_embeddings(fname):
+    embeddings = []
+    #with gzip.open(fname, 'rt') as fin:
+    with open(fname, 'r') as fin:
+        count = int(fin.readline().strip())
+        emb_size = int(fin.readline().strip())
+        for line in fin:
+            arr = line.strip().split(' ')
             vector = [float(x) for x in vector]
             embeddings.append(vector)
     logger.info("Loading {}".format(fname))
