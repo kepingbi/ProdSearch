@@ -91,7 +91,7 @@ class ProductRanker(nn.Module):
                 self.user_emb = nn.Embedding.from_pretrained(torch.FloatTensor(pretrained_weights))
 
         if self.args.use_item_emb:
-            if self.pretrain_emb_dir is None:
+            if self.pretrain_up_emb_dir is None:
                 self.product_emb = nn.Embedding(product_size+1, self.embedding_size, padding_idx=self.prod_pad_idx)
             else:
                 pretrain_product_emb_path = os.path.join(self.pretrain_up_emb_dir, "product_emb.txt")
@@ -103,10 +103,12 @@ class ProductRanker(nn.Module):
             word_emb_fname = "word_emb.txt.gz" #for query and target words in pv and pvc
             pretrain_word_emb_path = os.path.join(self.pretrain_emb_dir, word_emb_fname)
             word_index_dic, pretrained_weights = load_pretrain_embeddings(pretrain_word_emb_path)
-            word_indices = torch.tensor([0] + [word_index_dic[x] for x in self.vocab_words[1:]])
+            word_indices = torch.tensor([0] + [word_index_dic[x] for x in self.vocab_words[1:]] + [self.word_pad_idx])
+            #print(len(word_indices))
+            #print(word_indices.cpu().tolist())
             pretrained_weights = torch.FloatTensor(pretrained_weights)
-
-            self.word_embeddings = nn.Embedding.from_pretrained(pretrained_weights[word_indices])
+            self.word_embeddings = nn.Embedding.from_pretrained(pretrained_weights[word_indices], padding_idx=self.word_pad_idx)
+            #vectors of padding idx will not be updated
         else:
             self.word_embeddings = nn.Embedding(
                 vocab_size, self.embedding_size, padding_idx=self.word_pad_idx)
@@ -184,7 +186,9 @@ class ProductRanker(nn.Module):
             for i in range(seg_count):
                 slice_reviews = self.review_words[i*batch_size:(i+1)*batch_size]
                 if self.review_encoder_name == "pvc":
+                    self.review_encoder.set_to_evaluation_mode()
                     slice_review_emb = self.review_encoder.get_para_vector(slice_reviews)
+                    self.review_encoder.set_to_train_mode()
                 else: #fs or avg
                     slice_rword_emb = self.word_embeddings(slice_reviews)
                     slice_review_emb = self.review_encoder(slice_rword_emb, slice_reviews.ne(self.word_pad_idx))

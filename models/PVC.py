@@ -22,11 +22,11 @@ class ParagraphVectorCorruption(nn.Module):
         vocab_size = self.word_embeddings.weight.size()[0]
         self.word_pad_idx = vocab_size - 1
         if pretrain_emb_path is not None and vocab_words is not None:
-            word_index_dic, pretrained_weights = load_pretrain_embeddings(pretrain_word_emb_path)
-            word_indices = torch.tensor([0] + [word_index_dic[x] for x in vocab_words[1:]])
+            word_index_dic, pretrained_weights = load_pretrain_embeddings(pretrain_emb_path)
+            word_indices = torch.tensor([0] + [word_index_dic[x] for x in vocab_words[1:]] + [self.word_pad_idx])
             pretrained_weights = torch.FloatTensor(pretrained_weights)
 
-            self.context_embeddings = nn.Embedding.from_pretrained(pretrained_weights[word_indices])
+            self.context_embeddings = nn.Embedding.from_pretrained(pretrained_weights[word_indices], padding_idx=self.word_pad_idx)
         else:
             self.context_embeddings = nn.Embedding(
                 vocab_size, self._embedding_size, padding_idx=self.word_pad_idx)
@@ -34,6 +34,7 @@ class ParagraphVectorCorruption(nn.Module):
             self.context_embeddings.weight.requires_grad = False
             self.dropout_ = 0
         self.corrupt_rate = corrupt_rate
+        self.train_corrupt_rate = corrupt_rate
         self.dropout_ = dropout
         self.bce_logits_loss = torch.nn.BCEWithLogitsLoss(reduction='none')#by default it's mean
         #vocab_size - 1
@@ -54,8 +55,16 @@ class ParagraphVectorCorruption(nn.Module):
 
     def get_para_vector(self, prod_rword_idxs_pvc):
         pvc_word_emb = self.context_embeddings(prod_rword_idxs_pvc)
+        if self.corrupt_rate > 0.:
+            self.apply_token_dropout(pvc_word_emb, self.corrupt_rate)
         review_emb = get_vector_mean(pvc_word_emb, prod_rword_idxs_pvc.ne(self.word_pad_idx))
         return review_emb
+
+    def set_to_evaluation_mode(self):
+        self.corrupt_rate = 0.
+
+    def set_to_train_mode(self):
+        self.corrupt_rate = self.train_corrupt_rate
 
     def forward(self, review_word_emb, review_word_mask, prod_rword_idxs_pvc, n_negs):
         '''

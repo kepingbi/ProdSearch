@@ -3,7 +3,7 @@ from others.logging import logger
 
 def load_pretrain_embeddings(fname):
     embeddings = []
-    word_index_dic = []
+    word_index_dic = dict()
     with gzip.open(fname, 'rt') as fin:
         count = int(fin.readline().strip())
         emb_size = int(fin.readline().strip())
