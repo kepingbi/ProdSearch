@@ -83,10 +83,29 @@ class ItemPVDataloader(DataLoader):
         return batch
 
     def get_user_review_idxs(self, user_idx, review_idx, do_seq, fix=True):
+        u_seq_review_idxs = self.global_data.u_r_seq[user_idx]
+        u_train_review_set = self.prod_data.u_reviews[user_idx] #set
         if do_seq:
             loc_in_u = self.global_data.review_loc_time[review_idx][0]
             u_prev_review_idxs = self.global_data.u_r_seq[user_idx][:loc_in_u]
-            u_prev_review_idxs = self.global_data.u_r_seq[user_idx][-self.args.uprev_review_limit:]
+            u_prev_review_idxs = u_prev_review_idxs[-self.args.uprev_review_limit:]
+        else:
+            u_seq_train_review_idxs = [x for x in u_seq_review_idxs if x in u_train_review_set and x!= review_idx]
+            u_prev_review_idxs = u_seq_train_review_idxs
+            if len(u_seq_train_review_idxs) > self.args.uprev_review_limit:
+                if fix:
+                    u_prev_review_idxs = u_seq_train_review_idxs[-self.args.uprev_review_limit:]
+                else:
+                    rand_review_set = random.sample(u_seq_train_review_idxs, self.args.uprev_review_limit)
+                    rand_review_set = set(rand_review_set)
+                    u_prev_review_idxs = [x for x in u_seq_train_review_idxs if x in rand_review_set]
+        return u_prev_review_idxs
+
+    def get_user_review_idxs_prev(self, user_idx, review_idx, do_seq, fix=True):
+        if do_seq:
+            loc_in_u = self.global_data.review_loc_time[review_idx][0]
+            u_prev_review_idxs = self.global_data.u_r_seq[user_idx][:loc_in_u]
+            u_prev_review_idxs = u_prev_review_idxs[-self.args.uprev_review_limit:]
             #u_prev_review_idxs = self.global_data.u_r_seq[user_idx][max(0,loc_in_u-self.uprev_review_limit):loc_in_u]
         else:
             u_prev_review_idxs = self.prod_data.u_reviews[user_idx]
@@ -112,7 +131,8 @@ class ItemPVDataloader(DataLoader):
             query_idx = random.choice(self.prod_data.product_query_idx[prod_idx])
             query_word_idxs = self.global_data.query_words[query_idx]
 
-            u_prev_review_idxs = self.get_user_review_idxs(user_idx, review_idx, self.args.do_seq_review_train, fix=False)
+            u_prev_review_idxs = self.get_user_review_idxs(
+                    user_idx, review_idx, self.args.do_seq_review_train, fix=self.args.fix_train_review)
             u_item_idxs = [self.global_data.review_u_p[x][1] for x in u_prev_review_idxs]
             batch_query_word_idxs.append(query_word_idxs)
             batch_target_prod_idxs.append(prod_idx)

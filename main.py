@@ -32,6 +32,10 @@ def parse_args():
             help="whether to use separate embeddings for historical product and the target product")
     parser.add_argument("--pretrain_emb_dir", default='', help="pretrained paragraph and word embeddings")
     parser.add_argument("--pretrain_up_emb_dir", default='', help="pretrained user item embeddings")
+    #parser.add_argument("--review_train_mode", type=str, default='random', choices=["random", "prev", "last"]
+    #        help="use (sorted) random reviews in training data; reviews before current purchase; reviews that occur at the last in training set for training; ")
+    parser.add_argument("--fix_train_review", type=str2bool, nargs='?',const=True,default=False,
+            help="fix train reviews (the last reviews in the training set); ")
     parser.add_argument("--do_seq_review_train", type=str2bool, nargs='?',const=True,default=False,
             help="only use reviews before current purchase for training; ")
     parser.add_argument("--do_seq_review_test", type=str2bool, nargs='?',const=True,default=False,

@@ -193,7 +193,7 @@ class ProdSearchDataLoader(DataLoader):
             if loc_in_i == 0:
                 return []
             i_prev_review_idxs = self.global_data.i_r_seq[prod_idx][:loc_in_i]
-            i_prev_review_idxs = self.global_data.i_r_seq[prod_idx][-self.args.iprev_review_limit:]
+            i_prev_review_idxs = i_prev_review_idxs[-self.args.iprev_review_limit:]
             #i_prev_review_idxs = self.global_data.i_r_seq[prod_idx][max(0,loc_in_i-self.args.iprev_review_limit):loc_in_i]
 
         else:
@@ -211,7 +211,7 @@ class ProdSearchDataLoader(DataLoader):
         if do_seq:
             loc_in_u = self.global_data.review_loc_time[review_idx][0]
             u_prev_review_idxs = self.global_data.u_r_seq[user_idx][:loc_in_u]
-            u_prev_review_idxs = self.global_data.u_r_seq[user_idx][-self.args.uprev_review_limit:]
+            u_prev_review_idxs = u_prev_review_idxs[-self.args.uprev_review_limit:]
             #u_prev_review_idxs = self.global_data.u_r_seq[user_idx][max(0,loc_in_u-self.uprev_review_limit):loc_in_u]
         else:
             u_prev_review_idxs = self.prod_data.u_reviews[user_idx]

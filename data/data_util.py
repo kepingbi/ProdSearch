@@ -48,7 +48,8 @@ class ProdSearchData():
             if args.test_candi_size > 0 and os.path.exists(franklist): #otherwise use all the product ids
                 self.uq_pids = self.read_ranklist(franklist, global_data.product_asin2ids)
             #if args.train_review_only:
-        self.u_reviews, self.p_reviews = self.get_u_i_reviews(
+        #self.u_reviews, self.p_reviews = self.get_u_i_reviews(
+        self.u_reviews, self.p_reviews = self.get_u_i_reviews_set(
                 self.user_size, self.product_size, global_data.train_review_info)
 
         if args.prod_freq_neg_sample:
@@ -166,10 +167,11 @@ class GlobalProdSearchData():
             self.review_words.append([self.word_pad_idx]) # * args.review_word_limit)
             #so that review_words[-1] = -1, ..., -1
             self.review_words = util.pad(self.review_words, pad_id=self.vocab_size-1, width=args.review_word_limit)
-        if args.do_seq_review_train or args.do_seq_review_test:
-            self.u_r_seq = self.read_arr_from_lines("{}/u_r_seq.txt.gz".format(data_path)) #list of review ids
-            self.i_r_seq = self.read_arr_from_lines("{}/p_r_seq.txt.gz".format(data_path)) #list of review ids
-            self.review_loc_time = self.read_arr_from_lines("{}/review_uloc_ploc_and_time.txt.gz".format(data_path)) #(loc_in_u, loc_in_i, time) of each review
+        #if args.do_seq_review_train or args.do_seq_review_test:
+        self.u_r_seq = self.read_arr_from_lines("{}/u_r_seq.txt.gz".format(data_path)) #list of review ids
+        self.i_r_seq = self.read_arr_from_lines("{}/p_r_seq.txt.gz".format(data_path)) #list of review ids
+        self.review_loc_time = self.read_arr_from_lines("{}/review_uloc_ploc_and_time.txt.gz".format(data_path)) #(loc_in_u, loc_in_i, time) of each review
+
         self.line_review_id_map = self.read_review_id_line_map("{}/review_id.txt.gz".format(data_path))
         self.train_review_info, self.train_query_idxs = self.read_review_id(
                 "{}/train_id.txt.gz".format(input_train_dir), self.line_review_id_map)
