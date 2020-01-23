@@ -88,7 +88,8 @@ class ProductRanker(nn.Module):
                 pretrained_weights = load_user_item_embeddings(pretrain_user_emb_path)
                 pretrained_weights.append([0.] * len(pretrained_weights[0]))
                 assert len(pretrained_weights[0]) == self.embedding_size
-                self.user_emb = nn.Embedding.from_pretrained(torch.FloatTensor(pretrained_weights))
+                self.user_emb = nn.Embedding.from_pretrained(
+                        torch.FloatTensor(pretrained_weights), padding_idx=self.user_pad_idx)
 
         if self.args.use_item_emb:
             if self.pretrain_up_emb_dir is None:
@@ -97,10 +98,12 @@ class ProductRanker(nn.Module):
                 pretrain_product_emb_path = os.path.join(self.pretrain_up_emb_dir, "product_emb.txt")
                 pretrained_weights = load_user_item_embeddings(pretrain_product_emb_path)
                 pretrained_weights.append([0.] * len(pretrained_weights[0]))
-                self.product_emb = nn.Embedding.from_pretrained(torch.FloatTensor(pretrained_weights))
+                self.product_emb = nn.Embedding.from_pretrained(
+                        torch.FloatTensor(pretrained_weights), padding_idx=self.prod_pad_idx)
 
         if self.pretrain_emb_dir is not None:
-            word_emb_fname = "word_emb.txt.gz" #for query and target words in pv and pvc
+            #word_emb_fname = "word_emb.txt.gz" #for query and target words in pv and pvc
+            word_emb_fname = "context_emb.txt.gz" if args.review_encoder_name == "pvc" else "word_emb.txt.gz" #for query and target words in pv and pvc
             pretrain_word_emb_path = os.path.join(self.pretrain_emb_dir, word_emb_fname)
             word_index_dic, pretrained_weights = load_pretrain_embeddings(pretrain_word_emb_path)
             word_indices = torch.tensor([0] + [word_index_dic[x] for x in self.vocab_words[1:]] + [self.word_pad_idx])
@@ -131,8 +134,8 @@ class ProductRanker(nn.Module):
                     review_count, self.emb_dropout, pretrain_emb_path, fix_emb=self.fix_emb)
         elif self.review_encoder_name == "pvc":
             pretrain_emb_path = None
-            if self.pretrain_emb_dir is not None:
-                pretrain_emb_path = os.path.join(self.pretrain_emb_dir, "context_emb.txt.gz")
+            #if self.pretrain_emb_dir is not None:
+            #    pretrain_emb_path = os.path.join(self.pretrain_emb_dir, "context_emb.txt.gz")
             self.review_encoder = ParagraphVectorCorruption(
                     self.word_embeddings, self.word_dists, args.corrupt_rate,
                     self.emb_dropout, pretrain_emb_path, self.vocab_words, fix_emb=self.fix_emb)
@@ -228,14 +231,14 @@ class ProductRanker(nn.Module):
         candi_scores = candi_scores.view(batch_size, candi_k)
         return candi_scores
 
-    def forward(self, batch_data_arr, train_pv=True):
+    def forward_arr(self, batch_data_arr, train_pv=True):
         loss = []
         for batch_data in batch_data_arr:
-            cur_loss = self.pass_one_batch(batch_data, train_pv)
+            cur_loss = self.forward(batch_data, train_pv)
             loss.append(cur_loss)
         return sum(loss) / len(loss)
 
-    def pass_one_batch(self, batch_data, train_pv=True):
+    def forward(self, batch_data, train_pv=True):
         query_word_idxs = batch_data.query_word_idxs
         pos_prod_ridxs = batch_data.pos_prod_ridxs
         pos_seg_idxs = batch_data.pos_seg_idxs
@@ -269,9 +272,10 @@ class ProductRanker(nn.Module):
                             posr_word_emb, update_pos_prod_rword_masks,
                             pos_prod_rword_idxs_pvc.view(-1, pos_prod_rword_idxs_pvc.size(-1)),
                             self.args.neg_per_pos)
-                sample_count = pos_prod_ridxs.ne(self.review_pad_idx).float().sum()
-                sample_count = sample_count.masked_fill(sample_count.eq(0),1)
-                pv_loss = pos_prod_loss.sum() / sample_count
+                sample_count = pos_prod_ridxs.ne(self.review_pad_idx).float().sum(-1)
+                # it won't be less than batch_size since there is not any sequence with all padding indices
+                #sample_count = sample_count.masked_fill(sample_count.eq(0),1)
+                pv_loss = pos_prod_loss.sum() / sample_count.sum()
             else:
                 if self.fix_emb:
                     pos_review_emb = self.review_embeddings[pos_prod_ridxs]
@@ -338,6 +342,7 @@ class ProductRanker(nn.Module):
             pos_weight = self.args.neg_per_pos
         prod_mask = torch.cat([torch.ones(batch_size, 1, dtype=torch.uint8, device=query_word_idxs.device) * pos_weight,
             neg_prod_ridx_mask.sum(-1).ne(0)], dim=-1) #batch_size, neg_k (valid products, some are padded)
+        #TODO: this mask does not reflect true neg prods, when reviews are randomly selected all of them should valid since there is no need for padding
         prod_scores = torch.cat([pos_scores.unsqueeze(-1), neg_scores], dim=-1)
         target = torch.cat([torch.ones(batch_size, 1, device=query_word_idxs.device),
             torch.zeros(batch_size, neg_k, device=query_word_idxs.device)], dim=-1)

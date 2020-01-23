@@ -90,8 +90,9 @@ class ProdSearchData():
     def initialize_epoch(self):
         #self.neg_sample_products = np.random.randint(0, self.product_size, size = (self.set_review_size, self.neg_per_pos))
         #exlude padding idx
-        self.neg_sample_products = np.random.choice(self.product_size,
-                size = (self.set_review_size, self.neg_per_pos), replace=True, p=self.product_dists)
+        if self.args.model_name == "review_transformer":
+            self.neg_sample_products = np.random.choice(self.product_size,
+                    size = (self.set_review_size, self.neg_per_pos), replace=True, p=self.product_dists)
 
     def collect_product_distribute(self, review_info):
         product_distribute = np.zeros(self.product_size)
@@ -141,7 +142,6 @@ class ProdSearchData():
 
 class GlobalProdSearchData():
     def __init__(self, args, data_path, input_train_dir):
-        self.review_word_limit = args.review_word_limit
 
         self.product_ids = self.read_lines("{}/product.txt.gz".format(data_path))
         self.product_asin2ids = {x:i for i,x in enumerate(self.product_ids)}
@@ -154,13 +154,18 @@ class GlobalProdSearchData():
         self.word_pad_idx = self.vocab_size-1
         self.query_words = util.pad(self.query_words, pad_id=self.word_pad_idx)
 
+        review_word_limit = -1
+        if args.model_name == "review_transformer":
+            self.review_word_limit = args.review_word_limit
         self.review_words = self.read_words_in_lines(
-                "{}/review_text.txt.gz".format(data_path), cutoff=args.review_word_limit)
+                "{}/review_text.txt.gz".format(data_path), cutoff=review_word_limit)
+        #when using average word embeddings to train, review_word_limit is set
         self.review_length = [len(x) for x in self.review_words]
         self.review_count = len(self.review_words) + 1
-        self.review_words.append([self.word_pad_idx]) # * args.review_word_limit)
-        #so that review_words[-1] = -1, ..., -1
-        self.review_words = util.pad(self.review_words, pad_id=self.vocab_size-1, width=args.review_word_limit)
+        if args.model_name == "review_transformer":
+            self.review_words.append([self.word_pad_idx]) # * args.review_word_limit)
+            #so that review_words[-1] = -1, ..., -1
+            self.review_words = util.pad(self.review_words, pad_id=self.vocab_size-1, width=args.review_word_limit)
         if args.do_seq_review_train or args.do_seq_review_test:
             self.u_r_seq = self.read_arr_from_lines("{}/u_r_seq.txt.gz".format(data_path)) #list of review ids
             self.i_r_seq = self.read_arr_from_lines("{}/p_r_seq.txt.gz".format(data_path)) #list of review ids

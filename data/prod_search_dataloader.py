@@ -177,8 +177,6 @@ class ProdSearchDataLoader(DataLoader):
         candi_seq_user_idxs = util.pad_3d(candi_seq_user_idxs, pad_id = self.user_pad_idx, dim=2)
         candi_seq_item_idxs = util.pad_3d(candi_seq_item_idxs, pad_id = self.prod_pad_idx, dim=1)
         candi_seq_item_idxs = util.pad_3d(candi_seq_item_idxs, pad_id = self.prod_pad_idx, dim=2)
-        candi_prod_ridxs = np.asarray(candi_prod_ridxs)
-        batch_size, candi_k, nr_count = candi_prod_ridxs.shape
 
         batch = ProdSearchTestBatch(query_idxs, user_idxs, target_prod_idxs, candi_prod_idxs,
                 query_word_idxs, candi_prod_ridxs, candi_seg_idxs,
@@ -391,12 +389,12 @@ class ProdSearchDataLoader(DataLoader):
         else:
             neg_prod_rword_masks = self.dataset.get_pv_word_masks(
                     neg_prod_rword_idxs, self.prod_data.sub_sampling_rate, pad_id=self.word_pad_idx)
-            batch = [ProdSearchTrainBatch(query_word_idxs, pos_prod_ridxs, pos_seg_idxs,
+            batch = ProdSearchTrainBatch(query_word_idxs, pos_prod_ridxs, pos_seg_idxs,
                     pos_prod_rword_idxs, pos_prod_rword_masks,
                     neg_prod_ridxs, neg_seg_idxs,
                     pos_user_idxs, neg_user_idxs,
                     pos_item_idxs, neg_item_idxs,
                     neg_prod_rword_idxs = neg_prod_rword_idxs,
-                    neg_prod_rword_masks = neg_prod_rword_masks)]
+                    neg_prod_rword_masks = neg_prod_rword_masks)
         return batch
 

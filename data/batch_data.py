@@ -1,9 +1,101 @@
 import torch
 
+class ItemPVBatch(object):
+    def __init__(self, query_word_idxs, target_prod_idxs,
+                    u_item_idxs, pos_iword_idxs = [], query_idxs=[],
+                    user_idxs=[], candi_prod_idxs=[], to_tensor=True): #"cpu" or "cuda"
+        self.query_word_idxs = query_word_idxs
+        self.target_prod_idxs = target_prod_idxs
+        self.u_item_idxs = u_item_idxs
+        self.pos_iword_idxs = pos_iword_idxs
+        self.query_idxs = query_idxs
+        self.user_idxs = user_idxs
+        self.candi_prod_idxs = candi_prod_idxs
+        if to_tensor:
+            self.to_tensor()
+
+    def to_tensor(self):
+        self.query_word_idxs = torch.tensor(self.query_word_idxs)
+        self.target_prod_idxs = torch.tensor(self.target_prod_idxs)
+        self.candi_prod_idxs = torch.tensor(self.candi_prod_idxs)
+        self.u_item_idxs = torch.tensor(self.u_item_idxs)
+        self.pos_iword_idxs = torch.tensor(self.pos_iword_idxs)
+
+    def to(self, device):
+        if device == "cpu":
+            return self
+        else:
+            query_word_idxs = self.query_word_idxs.to(device)
+            target_prod_idxs = self.target_prod_idxs.to(device)
+            candi_prod_idxs = self.candi_prod_idxs.to(device)
+            u_item_idxs = self.u_item_idxs.to(device)
+            pos_iword_idxs = self.pos_iword_idxs.to(device)
+
+            return self.__class__(
+                    query_word_idxs, target_prod_idxs, u_item_idxs,
+                    pos_iword_idxs, self.query_idxs, self.user_idxs,
+                    candi_prod_idxs, to_tensor=False)
+
+class ItemPVBatch_seg(object):
+    def __init__(self, query_word_idxs, target_prod_idxs, candi_prod_idxs, pos_seg_idxs,
+                    neg_seg_idxs, pos_seq_item_idxs, neg_seq_item_idxs,
+                    pos_iword_idxs = None, query_idxs=None,
+                    user_idxs=None, to_tensor=True): #"cpu" or "cuda"
+        self.query_idxs = query_idxs
+        self.target_prod_idxs = target_prod_idxs
+        self.candi_prod_idxs = candi_prod_idxs
+        self.user_idxs = user_idxs
+        self.query_word_idxs = query_word_idxs
+        self.pos_seg_idxs = pos_seg_idxs
+        self.neg_seg_idxs = neg_seg_idxs
+        self.pos_seq_item_idxs = pos_seq_item_idxs
+        self.neg_seq_item_idxs = neg_seq_item_idxs
+        self.pos_iword_idxs = pos_iword_idxs
+        if to_tensor:
+            self.to_tensor()
+
+    def to_tensor(self):
+        self.query_word_idxs = torch.tensor(self.query_word_idxs)
+        self.target_prod_idxs = torch.tensor(self.target_prod_idxs)
+        #self.candi_prod_idxs = torch.tensor(self.candi_prod_idxs)
+        self.neg_seg_idxs = torch.tensor(self.neg_seg_idxs)
+        self.neg_seq_item_idxs = torch.tensor(self.neg_seq_item_idxs)
+        if self.pos_seg_idxs is not None:
+            self.pos_seg_idxs = torch.tensor(self.pos_seg_idxs)
+        if self.pos_seq_item_idxs is not None:
+            self.pos_seq_item_idxs = torch.tensor(self.pos_seq_item_idxs)
+        if self.pos_iword_idxs is not None:
+            self.pos_iword_idxs = torch.tensor(self.pos_iword_idxs)
+
+    def to(self, device):
+        if device == "cpu":
+            return self
+        else:
+            query_word_idxs = self.query_word_idxs.to(device)
+            target_prod_idxs = self.target_prod_idxs.to(device)
+            #candi_prod_idxs = self.candi_prod_idxs.to(device)
+            neg_seg_idxs = self.neg_seg_idxs.to(device)
+            neg_seq_item_idxs = self.neg_seq_item_idxs.to(device)
+            pos_seg_idxs = self.pos_seg_idxs
+            if self.pos_seg_idxs is not None:
+                pos_seg_idxs = self.pos_seg_idxs.to(device)
+            pos_seq_item_idxs = self.pos_seq_item_idxs
+            if self.pos_seq_item_idxs is not None:
+                pos_seq_item_idxs = self.pos_seq_item_idxs.to(device)
+            pos_iword_idxs = self.pos_iword_idxs
+            if self.pos_iword_idxs is not None:
+                pos_iword_idxs = self.pos_iword_idxs.to(device)
+
+            return self.__class__(
+                    query_word_idxs, target_prod_idxs, self.candi_prod_idxs, pos_seg_idxs,
+                    neg_seg_idxs, pos_seq_item_idxs, neg_seq_item_idxs,
+                    pos_iword_idxs, self.query_idxs, self.user_idxs, to_tensor=False)
+
 class ProdSearchTestBatch(object):
     def __init__(self, query_idxs, user_idxs, target_prod_idxs, candi_prod_idxs, query_word_idxs,
             candi_prod_ridxs, candi_seg_idxs, candi_seq_user_idxs, candi_seq_item_idxs, to_tensor=True): #"cpu" or "cuda"
         self.query_idxs = query_idxs
+        #for output query, user to ranklist
         self.user_idxs = user_idxs
         self.target_prod_idxs = target_prod_idxs
         self.candi_prod_idxs = candi_prod_idxs

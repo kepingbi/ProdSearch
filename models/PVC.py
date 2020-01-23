@@ -25,11 +25,11 @@ class ParagraphVectorCorruption(nn.Module):
             word_index_dic, pretrained_weights = load_pretrain_embeddings(pretrain_emb_path)
             word_indices = torch.tensor([0] + [word_index_dic[x] for x in vocab_words[1:]] + [self.word_pad_idx])
             pretrained_weights = torch.FloatTensor(pretrained_weights)
-
             self.context_embeddings = nn.Embedding.from_pretrained(pretrained_weights[word_indices], padding_idx=self.word_pad_idx)
         else:
-            self.context_embeddings = nn.Embedding(
-                vocab_size, self._embedding_size, padding_idx=self.word_pad_idx)
+            self.context_embeddings = self.word_embeddings
+            #self.context_embeddings = nn.Embedding(
+            #    vocab_size, self._embedding_size, padding_idx=self.word_pad_idx)
         if fix_emb:
             self.context_embeddings.weight.requires_grad = False
             self.dropout_ = 0

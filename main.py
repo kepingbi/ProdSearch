@@ -9,6 +9,7 @@ import os
 
 from others.logging import logger, init_logger
 from models.ps_model import ProductRanker, build_optim
+from models.item_transformer import ItemTransformerRanker
 from data.data_util import GlobalProdSearchData, ProdSearchData
 from trainer import Trainer
 from data.prod_search_dataset import ProdSearchDataset
@@ -26,6 +27,9 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', default=666, type=int)
     parser.add_argument("--train_from", default='')
+    parser.add_argument("--model_name", default='review_transformer', choices=['review_transformer', 'item_transformer'], help="which type of model is used to train")
+    parser.add_argument("--sep_prob_emb", type=str2bool, nargs='?',const=True,default=False,
+            help="whether to use separate embeddings for historical product and the target product")
     parser.add_argument("--pretrain_emb_dir", default='', help="pretrained paragraph and word embeddings")
     parser.add_argument("--pretrain_up_emb_dir", default='', help="pretrained user item embeddings")
     parser.add_argument("--do_seq_review_train", type=str2bool, nargs='?',const=True,default=False,
@@ -121,10 +125,16 @@ model_flags = ['embedding_size', 'ff_size', 'heads', 'inter_layers','review_enco
 
 def create_model(args, global_data, prod_data, load_path=''):
     """Create translation model and initialize or load parameters in session."""
-    model = ProductRanker(args, args.device, global_data.vocab_size,
-            global_data.review_count, global_data.product_size, global_data.user_size,
-            global_data.review_words, global_data.words, word_dists=prod_data.word_dists)
-    if load_path != '':
+    if args.model_name == "review_transformer":
+        model = ProductRanker(args, args.device, global_data.vocab_size,
+                global_data.review_count, global_data.product_size, global_data.user_size,
+                global_data.review_words, global_data.words, word_dists=prod_data.word_dists)
+    else:
+        model = ItemTransformerRanker(args, args.device, global_data.vocab_size,
+                global_data.product_size, global_data.words, word_dists=prod_data.word_dists)
+
+    if os.path.exists(load_path):
+    #if load_path != '':
         logger.info('Loading checkpoint from %s' % load_path)
         checkpoint = torch.load(load_path,
                                 map_location=lambda storage, loc: storage)
@@ -136,6 +146,7 @@ def create_model(args, global_data, prod_data, load_path=''):
         model.load_cp(checkpoint)
         optim = build_optim(args, model, checkpoint)
     else:
+        logger.info('No available model to load. Build new model.')
         optim = build_optim(args, model, None)
     logger.info(model)
     return model, optim
