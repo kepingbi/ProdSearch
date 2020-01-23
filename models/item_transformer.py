@@ -43,7 +43,7 @@ class ItemTransformerRanker(nn.Module):
         self.dropout_layer = nn.Dropout(p=args.dropout)
 
         self.product_emb = nn.Embedding(product_size+1, self.embedding_size, padding_idx=self.prod_pad_idx)
-        if args.sep_prob_emb:
+        if args.sep_prod_emb:
             self.hist_product_emb = nn.Embedding(product_size+1, self.embedding_size, padding_idx=self.prod_pad_idx)
         '''
         else:
@@ -113,7 +113,7 @@ class ItemTransformerRanker(nn.Module):
             column_mask.expand(-1, -1, prev_item_count),
             column_mask*2], dim = 2)
         candi_item_emb = self.product_emb(candi_prod_idxs) #batch_size, candi_k, embedding_size
-        if self.args.sep_prob_emb:
+        if self.args.sep_prod_emb:
             u_item_emb = self.hist_product_emb(u_item_idxs)
         else:
             u_item_emb = self.product_emb(u_item_idxs)
@@ -204,7 +204,7 @@ class ItemTransformerRanker(nn.Module):
             column_mask*2], dim = 2)
         target_item_emb = self.product_emb(target_prod_idxs)
         neg_item_emb = self.product_emb(neg_item_idxs) #batch_size, neg_k, embedding_size
-        if self.args.sep_prob_emb:
+        if self.args.sep_prod_emb:
             u_item_emb = self.hist_product_emb(u_item_idxs)
         else:
             u_item_emb = self.product_emb(u_item_idxs)

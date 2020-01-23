@@ -28,7 +28,7 @@ def parse_args():
     parser.add_argument('--seed', default=666, type=int)
     parser.add_argument("--train_from", default='')
     parser.add_argument("--model_name", default='review_transformer', choices=['review_transformer', 'item_transformer'], help="which type of model is used to train")
-    parser.add_argument("--sep_prob_emb", type=str2bool, nargs='?',const=True,default=False,
+    parser.add_argument("--sep_prod_emb", type=str2bool, nargs='?',const=True,default=False,
             help="whether to use separate embeddings for historical product and the target product")
     parser.add_argument("--pretrain_emb_dir", default='', help="pretrained paragraph and word embeddings")
     parser.add_argument("--pretrain_up_emb_dir", default='', help="pretrained user item embeddings")

@@ -39,12 +39,42 @@ large_pvc_path = "batch_size512.negative_sample5.learning_rate0.5.embed_size128.
 
 para_names = ['pretrain_type', 'review_encoder_name', 'max_train_epoch', 'lr', 'warmup_steps', 'batch_size', 'valid_candi_size', \
         'embedding_size', 'review_word_limit', 'iprev_review_limit', 'dropout', \
-        'prod_freq_neg_sample', 'fix_emb', 'pos_weight', 'l2_lambda', 'ff_size', 'inter_layers', 'use_user_emb', 'use_item_emb']
+        'use_pos_emb', 'corrupt_rate', 'pos_weight', 'l2_lambda', 'ff_size', 'inter_layers', 'use_user_emb', 'use_item_emb']
 short_names = ['pretrain', 'enc', 'me', 'lr', 'ws', 'bs', 'vcs', 'ebs', \
-                'rwl', 'irl', 'drop', 'prodneg', 'fixemb', 'poswt', 'lambda', 'ff', 'ly', 'ue', 'ie']
+                'rwl', 'irl', 'drop', 'upos', 'cr', 'poswt', 'lambda', 'ff', 'ly', 'ue', 'ie']
 
 paras = [
-        ('CDs_and_Vinyl', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
+        ('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.005, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True),
+        ('Sports_and_Outdoors', 'pv', 'fs', 20, 0.005, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True),
+        ('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 1e-4, 512, 2, True, True),
+        ('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 1e-3, 512, 2, True, True),
+        ('Sports_and_Outdoors', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 1e-4, 512, 2, True, True),
+        ('Sports_and_Outdoors', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 1e-3, 512, 2, True, True),
+
+        #('Cell_Phones_and_Accessories', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, 0.2, False, 0, 512, 2, True, True),
+        #('Cell_Phones_and_Accessories', 'pvc', 'pvc', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.3, False, 0, 512, 2, True, True),
+        #('Cell_Phones_and_Accessories', 'pvc', 'pvc', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.4, False, 0, 512, 2, True, True),
+        #('Clothing_Shoes_and_Jewelry', 'pvc', 'pvc', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True),
+        #('Clothing_Shoes_and_Jewelry', 'pvc', 'pvc', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False),
+        #('Clothing_Shoes_and_Jewelry', 'pvc', 'pvc', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, 0.2, False, 0, 512, 2, False, False),
+        #('Sports_and_Outdoors', 'pvc', 'pvc', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False),
+        #('Sports_and_Outdoors', 'pvc', 'pvc', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, 0.2, False, 0, 512, 2, False, False),
+        #('Sports_and_Outdoors', 'pvc', 'pvc', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True),
+
+        #('CDs_and_Vinyl', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
+        #('CDs_and_Vinyl', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
+        #('CDs_and_Vinyl', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 200, 30, 0.1, False, False, False, 0, 512, 2, False, False),
+        #('CDs_and_Vinyl', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 200, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.2, False, False, False, 0, 512, 2, True, True),
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 1e-4, 512, 2, True, True),
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 1e-4, 512, 2, False, False),
+
+        #('Sports_and_Outdoors', 'pv', 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
+        #('Electronics', 'pv', 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
+        #('Movies_and_TV', 'pv', 'fs', 20, 0.002, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, False, False),
 
         #('Clothing_Shoes_and_Jewelry', None, 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
         #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 50, 0.01, 15000, 128, 1000, 128, 100, 30, 0.1, False, False, False, 0, 512, 2, True, True),
