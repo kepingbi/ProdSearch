@@ -96,6 +96,7 @@ class ItemPVDataloader(DataLoader):
                     #u_prev_review_idxs = u_prev_review_idxs[-self.args.uprev_review_limit:]
                 else:
                     u_prev_review_idxs = random.sample(u_prev_review_idxs, self.args.uprev_review_limit)
+            u_prev_review_idxs = [x for x in u_prev_review_idxs if x != review_idx]
         return u_prev_review_idxs
 
     def get_train_batch(self, batch):

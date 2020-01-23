@@ -229,8 +229,14 @@ class Optimizer(object):
                    % self.decay_steps == 0):
                     self.learning_rate = self.learning_rate * self.lr_decay
 
-        if self.method != 'sparseadam':
+        #if self.method != 'sparseadam':
+        if self.decay_method == "noam" and self.method != 'sparseadam':
+            #only if we schedule the learning rate with noam decay, we set the learning rate
+            #otherwise we just use the original one by the optimizer
+            #revised by Keping
             self.optimizer.param_groups[0]['lr'] = self.learning_rate
+        #print("Number of parameter groups", len(self.optimizer.param_groups))
+        #there are only one parameter groups in current model
 
         if self.max_grad_norm:
             clip_grad_norm_(self.params, self.max_grad_norm)
