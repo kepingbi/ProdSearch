@@ -27,77 +27,19 @@ class ProdSearchDataLoader(DataLoader):
         self.prod_data = self.dataset.prod_data
         self.shuffle_review_words = self.dataset.shuffle_review_words
         self.total_review_limit = self.args.uprev_review_limit + self.args.iprev_review_limit
-
+        if self.args.do_subsample_mask:
+            self.review_words = self.global_data.review_words
+            self.sub_sampling_rate = self.prod_data.sub_sampling_rate
+        else:
+            self.review_words = self.global_data.padded_review_words
+            self.sub_sampling_rate = None
+        #if subsampling_rate is 0 then sub_sampling_rate is [1,1,1], all the words are kept
 
     def _collate_fn(self, batch):
         if self.prod_data.set_name == 'train':
             return self.get_train_batch(batch)
         else: #validation or test
             return self.get_test_batch(batch)
-        '''
-            if self.args.do_seq_review_test:
-                return self.get_test_batch(batch)
-            else:
-                return self.get_test_batch_random(batch)
-        '''
-
-    def get_test_batch_random(self, batch):
-        query_idxs = [entry[0] for entry in batch]
-        query_word_idxs = [self.global_data.query_words[x] for x in query_idxs]
-        user_idxs = [entry[1] for entry in batch]
-        target_prod_idxs = [entry[2] for entry in batch]
-        candi_prod_idxs = [entry[4] for entry in batch]
-        candi_prod_ridxs = []
-        candi_seg_idxs = []
-        candi_seq_user_idxs = []
-        candi_seq_item_idxs = []
-        #candi_prod_ridxs = [entry[4] for entry in batch]
-        #candi_seg_idxs = [entry[5] for entry in batch]
-        for _, user_idx, _, review_idx, candidate_items in batch:
-            #if self.args.train_review_only:
-            u_prev_review_idxs = self.prod_data.u_reviews[user_idx][:self.args.uprev_review_limit]
-            u_item_idxs = [self.global_data.review_u_p[x][1] for x in u_prev_review_idxs]
-
-            candi_batch_item_idxs = []
-            candi_batch_user_idxs = []
-            candi_batch_seg_idxs = []
-            candi_batch_prod_ridxs = []
-            for candi_i in candidate_items:
-                candi_i_prev_review_idxs = self.prod_data.p_reviews[candi_i][:self.args.iprev_review_limit]
-                candi_i_user_idxs = [self.global_data.review_u_p[x][0] for x in candi_i_prev_review_idxs]
-                cur_candi_i_user_idxs =  [self.user_pad_idx] + [user_idx] * len(u_prev_review_idxs) + candi_i_user_idxs
-                cur_candi_i_user_idxs = cur_candi_i_user_idxs[:self.total_review_limit+1]
-                cur_candi_i_item_idxs =  [self.prod_pad_idx] + u_item_idxs + [candi_i] * len(candi_i_prev_review_idxs)
-                cur_candi_i_item_idxs = cur_candi_i_item_idxs[:self.total_review_limit+1]
-                cur_candi_i_masks = [0] + [1] * len(u_prev_review_idxs) + [2] * len(candi_i_prev_review_idxs) #might be 0
-                cur_candi_i_masks = cur_candi_i_masks[:self.total_review_limit+1]
-                cur_candi_i_review_idxs = u_prev_review_idxs + candi_i_prev_review_idxs
-                cur_candi_i_review_idxs = cur_candi_i_review_idxs[:self.total_review_limit]
-                candi_batch_seg_idxs.append(cur_candi_i_masks)
-                candi_batch_prod_ridxs.append(cur_candi_i_review_idxs)
-                candi_batch_item_idxs.append(cur_candi_i_item_idxs)
-                candi_batch_user_idxs.append(cur_candi_i_user_idxs)
-            candi_prod_ridxs.append(candi_batch_prod_ridxs)
-            candi_seg_idxs.append(candi_batch_seg_idxs)
-            candi_seq_item_idxs.append(candi_batch_item_idxs)
-            candi_seq_user_idxs.append(candi_batch_user_idxs)
-
-        candi_prod_idxs = util.pad(candi_prod_idxs, pad_id = -1) #pad reviews
-        candi_prod_ridxs = util.pad_3d(candi_prod_ridxs, pad_id = self.review_pad_idx, dim=1) #pad candi products, no need
-        candi_prod_ridxs = util.pad_3d(candi_prod_ridxs, pad_id = self.review_pad_idx, dim=2) #pad reviews of each candi
-        candi_seg_idxs = util.pad_3d(candi_seg_idxs, pad_id = self.seg_pad_idx, dim=1)
-        candi_seg_idxs = util.pad_3d(candi_seg_idxs, pad_id = self.seg_pad_idx, dim=2)
-        candi_seq_user_idxs = util.pad_3d(candi_seq_user_idxs, pad_id = self.user_pad_idx, dim=1)
-        candi_seq_user_idxs = util.pad_3d(candi_seq_user_idxs, pad_id = self.user_pad_idx, dim=2)
-        candi_seq_item_idxs = util.pad_3d(candi_seq_item_idxs, pad_id = self.prod_pad_idx, dim=1)
-        candi_seq_item_idxs = util.pad_3d(candi_seq_item_idxs, pad_id = self.prod_pad_idx, dim=2)
-        candi_prod_ridxs = np.asarray(candi_prod_ridxs)
-        batch_size, candi_k, nr_count = candi_prod_ridxs.shape
-
-        batch = ProdSearchTestBatch(query_idxs, user_idxs, target_prod_idxs, candi_prod_idxs,
-                query_word_idxs, candi_prod_ridxs, candi_seg_idxs,
-                candi_seq_user_idxs, candi_seq_item_idxs)
-        return batch
 
     def get_test_batch(self, batch):
         query_idxs = [entry[0] for entry in batch]
@@ -121,14 +63,6 @@ class ProdSearchDataLoader(DataLoader):
             review_time_stamp = None
             if self.args.do_seq_review_test:
                 review_time_stamp = self.global_data.review_loc_time[review_idx][2]
-            '''
-            loc_in_u = self.global_data.review_loc_time[review_idx][0]
-            u_prev_review_idxs = self.global_data.u_r_seq[user_idx][:loc_in_u]
-            if self.args.train_review_only:
-                u_prev_review_idxs = [x for x in u_prev_review_idxs if x in self.prod_data.u_reviews[user_idx]]
-            #u_prev_review_idxs = self.global_data.u_r_seq[user_idx][max(0,loc_in_u-self.args.uprev_review_limit):loc_in_u]
-            u_prev_review_idxs = u_prev_review_idxs[-self.args.uprev_review_limit:]
-            '''
             u_item_idxs = [self.global_data.review_u_p[x][1] for x in u_prev_review_idxs]
 
             candi_batch_item_idxs = []
@@ -141,15 +75,6 @@ class ProdSearchDataLoader(DataLoader):
                 #else:
                 candi_i_prev_review_idxs = self.get_item_review_idxs(
                         candi_i, None, do_seq, review_time_stamp, fix=True)
-                '''
-                loc_in_candi_i = self.dataset.bisect_right(
-                        self.global_data.i_r_seq[candi_i], self.global_data.review_loc_time, review_time_stamp)
-                candi_i_prev_review_idxs = self.global_data.i_r_seq[candi_i][:loc_in_candi_i]
-                if self.args.train_review_only:
-                    candi_i_prev_review_idxs = [x for x in candi_i_prev_review_idxs if x in self.prod_data.p_reviews[candi_i]]
-                candi_i_prev_review_idxs = self.global_data.i_r_seq[candi_i][-self.args.iprev_review_limit:]
-                #candi_i_prev_review_idxs = self.global_data.i_r_seq[candi_i][max(0,loc_in_candi_i-self.args.iprev_review_limit):loc_in_candi_i]
-                '''
                 candi_i_user_idxs = [self.global_data.review_u_p[x][0] for x in candi_i_prev_review_idxs]
                 cur_candi_i_user_idxs =  [self.user_pad_idx] + [user_idx] * len(u_prev_review_idxs) + candi_i_user_idxs
                 cur_candi_i_user_idxs = cur_candi_i_user_idxs[:self.total_review_limit+1]
@@ -183,7 +108,7 @@ class ProdSearchDataLoader(DataLoader):
                 candi_seq_user_idxs, candi_seq_item_idxs)
         return batch
 
-    def get_item_review_idxs(self, prod_idx, review_idx, do_seq, review_time_stamp=None,fix=True):
+    def get_item_review_idxs_prev(self, prod_idx, review_idx, do_seq, review_time_stamp=None,fix=True):
         if do_seq:
             if review_idx is None:
                 loc_in_i = self.dataset.bisect_right(
@@ -207,7 +132,34 @@ class ProdSearchDataLoader(DataLoader):
 
         return i_prev_review_idxs
 
-    def get_user_review_idxs(self, user_idx, review_idx, do_seq, fix=True):
+    def get_item_review_idxs(self, prod_idx, review_idx, do_seq, review_time_stamp=None,fix=True):
+        i_seq_review_idxs = self.global_data.i_r_seq[prod_idx]
+        i_train_review_set = self.prod_data.p_reviews[prod_idx]
+        if do_seq:
+            if review_idx is None:
+                loc_in_i = self.dataset.bisect_right(
+                        self.global_data.i_r_seq[prod_idx], self.global_data.review_loc_time, review_time_stamp)
+            else:
+                loc_in_i = self.global_data.review_loc_time[review_idx][1]
+            if loc_in_i == 0:
+                return []
+            i_prev_review_idxs = self.global_data.i_r_seq[prod_idx][:loc_in_i]
+            i_prev_review_idxs = i_prev_review_idxs[-self.args.iprev_review_limit:]
+        else:
+            i_seq_train_review_idxs = [x for x in i_seq_review_idxs if x in i_train_review_set and x!= review_idx]
+            i_prev_review_idxs = i_seq_train_review_idxs
+            if len(i_prev_review_idxs) > self.args.iprev_review_limit:
+                if fix:
+                    #i_prev_review_idxs = i_prev_review_idxs[:self.args.iprev_review_limit]
+                    i_prev_review_idxs = i_prev_review_idxs[-self.args.iprev_review_limit:]
+                else:
+                    rand_review_set = random.sample(i_seq_train_review_idxs, self.args.iprev_review_limit)
+                    rand_review_set = set(rand_review_set)
+                    i_prev_review_idxs = [x for x in i_seq_train_review_idxs if x in rand_review_set]
+
+        return i_prev_review_idxs
+
+    def get_user_review_idxs_prev(self, user_idx, review_idx, do_seq, fix=True):
         if do_seq:
             loc_in_u = self.global_data.review_loc_time[review_idx][0]
             u_prev_review_idxs = self.global_data.u_r_seq[user_idx][:loc_in_u]
@@ -221,6 +173,25 @@ class ProdSearchDataLoader(DataLoader):
                     #u_prev_review_idxs = u_prev_review_idxs[-self.args.uprev_review_limit:]
                 else:
                     u_prev_review_idxs = random.sample(u_prev_review_idxs, self.args.uprev_review_limit)
+        return u_prev_review_idxs
+
+    def get_user_review_idxs(self, user_idx, review_idx, do_seq, fix=True):
+        u_seq_review_idxs = self.global_data.u_r_seq[user_idx]
+        u_train_review_set = self.prod_data.u_reviews[user_idx] #set
+        if do_seq:
+            loc_in_u = self.global_data.review_loc_time[review_idx][0]
+            u_prev_review_idxs = self.global_data.u_r_seq[user_idx][:loc_in_u]
+            u_prev_review_idxs = u_prev_review_idxs[-self.args.uprev_review_limit:]
+        else:
+            u_seq_train_review_idxs = [x for x in u_seq_review_idxs if x in u_train_review_set and x!= review_idx]
+            u_prev_review_idxs = u_seq_train_review_idxs
+            if len(u_seq_train_review_idxs) > self.args.uprev_review_limit:
+                if fix:
+                    u_prev_review_idxs = u_seq_train_review_idxs[-self.args.uprev_review_limit:]
+                else:
+                    rand_review_set = random.sample(u_seq_train_review_idxs, self.args.uprev_review_limit)
+                    rand_review_set = set(rand_review_set)
+                    u_prev_review_idxs = [x for x in u_seq_train_review_idxs if x in rand_review_set]
         return u_prev_review_idxs
 
     def prepare_train_batch(self, batch):
@@ -308,31 +279,18 @@ class ProdSearchDataLoader(DataLoader):
         if len(query_word_idxs) == 0:
             print("0 available instance in the batch")
             return None
-        '''
-        query_idxs = [entry[0] for entry in batch]
-        query_word_idxs = [self.global_data.query_words[x] for x in query_idxs]
-        pos_prod_ridxs = [entry[1] for entry in batch]
-        pos_seg_idxs = [entry[2] for entry in batch]
-        #batch_size, review_count, word_limit
-        neg_prod_ridxs = [entry[3] for entry in batch]
-        #batch_size, neg_k, review_count
-        neg_seg_idxs = [entry[4] for entry in batch]
-        pos_user_idxs = [entry[5] for entry in batch]
-        neg_user_idxs = [entry[6] for entry in batch]
-        pos_item_idxs = [entry[7] for entry in batch]
-        neg_item_idxs = [entry[8] for entry in batch]
-        '''
         pos_prod_ridxs = util.pad(pos_prod_ridxs, pad_id = self.review_pad_idx) #pad reviews
         pos_seg_idxs = util.pad(pos_seg_idxs, pad_id = self.seg_pad_idx)
         pos_user_idxs = util.pad(pos_user_idxs, pad_id = self.user_pad_idx)
         pos_item_idxs = util.pad(pos_item_idxs, pad_id = self.prod_pad_idx)
         pos_prod_ridxs = np.asarray(pos_prod_ridxs)
         batch_size, pos_rcount = pos_prod_ridxs.shape
-        pos_prod_rword_idxs = [self.global_data.review_words[x] for x in pos_prod_ridxs.reshape(-1)]
+        pos_prod_rword_idxs = [self.review_words[x] for x in pos_prod_ridxs.reshape(-1)]
         #pos_prod_rword_idxs = util.pad(pos_prod_rword_idxs, pad_id = self.word_pad_idx)
         pos_prod_rword_idxs = np.asarray(pos_prod_rword_idxs).reshape(batch_size, pos_rcount, -1)
         pos_prod_rword_masks = self.dataset.get_pv_word_masks(
-                pos_prod_rword_idxs, self.prod_data.sub_sampling_rate, pad_id=self.word_pad_idx)
+                #pos_prod_rword_idxs, self.prod_data.sub_sampling_rate, pad_id=self.word_pad_idx)
+                pos_prod_rword_idxs, self.sub_sampling_rate, pad_id=self.word_pad_idx)
         neg_prod_ridxs = util.pad_3d(neg_prod_ridxs, pad_id = self.review_pad_idx, dim=1) #pad neg products
         neg_prod_ridxs = util.pad_3d(neg_prod_ridxs, pad_id = self.review_pad_idx, dim=2) #pad reviews of each neg
         neg_seg_idxs = util.pad_3d(neg_seg_idxs, pad_id = self.seg_pad_idx, dim=1)
@@ -343,7 +301,7 @@ class ProdSearchDataLoader(DataLoader):
         neg_item_idxs = util.pad_3d(neg_item_idxs, pad_id = self.prod_pad_idx, dim=2)
         neg_prod_ridxs = np.asarray(neg_prod_ridxs)
         _, neg_k, nr_count = neg_prod_ridxs.shape
-        neg_prod_rword_idxs = [self.global_data.review_words[x] for x in neg_prod_ridxs.reshape(-1)]
+        neg_prod_rword_idxs = [self.review_words[x] for x in neg_prod_ridxs.reshape(-1)]
         #neg_prod_rword_idxs = util.pad(neg_prod_rword_idxs, pad_id = self.word_pad_idx)
         neg_prod_rword_idxs = np.asarray(neg_prod_rword_idxs).reshape(batch_size, neg_k, nr_count, -1)
 
@@ -388,7 +346,8 @@ class ProdSearchDataLoader(DataLoader):
                 neg_prod_rword_idxs_pvc = neg_prod_rword_idxs_pvc[batch_indices[i]]) for i in range(seg_count)]
         else:
             neg_prod_rword_masks = self.dataset.get_pv_word_masks(
-                    neg_prod_rword_idxs, self.prod_data.sub_sampling_rate, pad_id=self.word_pad_idx)
+                    #neg_prod_rword_idxs, self.prod_data.sub_sampling_rate, pad_id=self.word_pad_idx)
+                    neg_prod_rword_idxs, self.sub_sampling_rate, pad_id=self.word_pad_idx)
             batch = ProdSearchTrainBatch(query_word_idxs, pos_prod_ridxs, pos_seg_idxs,
                     pos_prod_rword_idxs, pos_prod_rword_masks,
                     neg_prod_ridxs, neg_seg_idxs,

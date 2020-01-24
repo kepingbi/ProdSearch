@@ -12,6 +12,7 @@ class ProdSearchData():
         self.args = args
         self.neg_per_pos = args.neg_per_pos
         self.set_name = set_name
+        self.global_data = global_data
         self.product_size = global_data.product_size
         self.user_size = global_data.user_size
         self.vocab_size = global_data.vocab_size
@@ -91,9 +92,29 @@ class ProdSearchData():
     def initialize_epoch(self):
         #self.neg_sample_products = np.random.randint(0, self.product_size, size = (self.set_review_size, self.neg_per_pos))
         #exlude padding idx
-        if self.args.model_name == "review_transformer":
-            self.neg_sample_products = np.random.choice(self.product_size,
-                    size = (self.set_review_size, self.neg_per_pos), replace=True, p=self.product_dists)
+        if self.args.model_name == "item_transformer":
+            return
+        self.neg_sample_products = np.random.choice(self.product_size,
+                size = (self.set_review_size, self.neg_per_pos), replace=True, p=self.product_dists)
+        #do subsampling to self.global_data.review_words
+        if self.args.do_subsample_mask:
+            #self.global_data.set_padded_review_words(self.global_data.review_words)
+            return
+
+        rand_numbers = np.random.random(sum(self.global_data.review_length))
+        updated_review_words = []
+        entry_id = 0
+        for review in self.global_data.review_words[:-1]:
+            filtered_review = []
+            for word_idx in review:
+                if rand_numbers[entry_id] > self.sub_sampling_rate[word_idx]:
+                    continue
+                filtered_review.append(word_idx)
+            updated_review_words.append(filtered_review)
+        updated_review_words.append([self.global_data.word_pad_idx])
+        updated_review_words = util.pad(updated_review_words,
+                pad_id=self.global_data.word_pad_idx, width=self.args.review_word_limit)
+        self.global_data.set_padded_review_words(updated_review_words)
 
     def collect_product_distribute(self, review_info):
         product_distribute = np.zeros(self.product_size)
@@ -155,18 +176,19 @@ class GlobalProdSearchData():
         self.word_pad_idx = self.vocab_size-1
         self.query_words = util.pad(self.query_words, pad_id=self.word_pad_idx)
 
-        review_word_limit = -1
-        if args.model_name == "review_transformer":
-            self.review_word_limit = args.review_word_limit
+        #review_word_limit = -1
+        #if args.model_name == "review_transformer":
+        #    self.review_word_limit = args.review_word_limit
         self.review_words = self.read_words_in_lines(
-                "{}/review_text.txt.gz".format(data_path), cutoff=review_word_limit)
+                "{}/review_text.txt.gz".format(data_path)) #, cutoff=review_word_limit)
         #when using average word embeddings to train, review_word_limit is set
         self.review_length = [len(x) for x in self.review_words]
         self.review_count = len(self.review_words) + 1
         if args.model_name == "review_transformer":
             self.review_words.append([self.word_pad_idx]) # * args.review_word_limit)
             #so that review_words[-1] = -1, ..., -1
-            self.review_words = util.pad(self.review_words, pad_id=self.vocab_size-1, width=args.review_word_limit)
+            if args.do_subsample_mask:
+                self.review_words = util.pad(self.review_words, pad_id=self.vocab_size-1, width=args.review_word_limit)
         #if args.do_seq_review_train or args.do_seq_review_test:
         self.u_r_seq = self.read_arr_from_lines("{}/u_r_seq.txt.gz".format(data_path)) #list of review ids
         self.i_r_seq = self.read_arr_from_lines("{}/p_r_seq.txt.gz".format(data_path)) #list of review ids
@@ -179,8 +201,11 @@ class GlobalProdSearchData():
 
         logger.info("Data statistic: vocab %d, review %d, user %d, product %d" % (self.vocab_size,
                     self.review_count, self.user_size, self.product_size))
+        self.padded_review_words = None
 
-
+    def set_padded_review_words(self, review_words):
+        self.padded_review_words = review_words
+        #words after subsampling and cutoff and padding
 
     '''
     def read_review_loc_time(self, fname):

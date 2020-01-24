@@ -61,6 +61,8 @@ def parse_args():
                             help="Clip gradients to this norm.")
     parser.add_argument("--subsampling_rate", type=float, default=1e-5,
                             help="The rate to subsampling.")
+    parser.add_argument("--do_subsample_mask", type=str2bool, nargs='?',const=True,default=False,
+            help="do subsampling mask do the reviews with cutoff review_word_limit; otherwise do subsampling then do the cutoff.")
     parser.add_argument("--prod_freq_neg_sample", type=str2bool, nargs='?',const=True,default=False,
             help="whether to sample negative products according to their purchase frequency.")
     parser.add_argument("--pos_weight", type=str2bool, nargs='?',const=True,default=False,

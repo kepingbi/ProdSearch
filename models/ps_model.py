@@ -53,7 +53,7 @@ def build_optim(args, model, checkpoint):
 class ProductRanker(nn.Module):
     def __init__(self, args, device, vocab_size, review_count,
             product_size, user_size,
-            padded_review_words, vocab_words, word_dists=None):
+            review_words, vocab_words, word_dists=None):
         super(ProductRanker, self).__init__()
         self.args = args
         self.device = device
@@ -63,7 +63,6 @@ class ProductRanker(nn.Module):
         self.word_dists = None
         if word_dists is not None:
             self.word_dists = torch.tensor(word_dists, device=device)
-        self.review_words = torch.tensor(padded_review_words, device=device)
         self.prod_pad_idx = product_size
         self.user_pad_idx = user_size
         self.word_pad_idx = vocab_size - 1
@@ -72,6 +71,12 @@ class ProductRanker(nn.Module):
         self.emb_dropout = args.dropout
         self.review_encoder_name = args.review_encoder_name
         self.fix_emb = args.fix_emb
+
+        if not self.args.do_subsample_mask:
+            #otherwise, review_words should be already padded
+            padded_review_words = pad(review_words, pad_id=self.word_pad_idx, width=args.review_word_limit)
+        self.review_words = torch.tensor(padded_review_words, device=device)
+
         self.pretrain_emb_dir = None
         if os.path.exists(args.pretrain_emb_dir):
             self.pretrain_emb_dir = args.pretrain_emb_dir
@@ -181,7 +186,6 @@ class ProductRanker(nn.Module):
         if self.review_encoder_name == "pv":
             self.review_embeddings = self.review_encoder.review_embeddings.weight
         else:
-            #padded_review_words = pad(global_data.review_words, pad_id = self.word_pad_idx)
             review_count = self.review_pad_idx
             seg_count = int((review_count - 1) / batch_size) + 1
             self.review_embeddings = torch.zeros(review_count+1, self.embedding_size, device=self.device)
@@ -230,13 +234,6 @@ class ProductRanker(nn.Module):
                 candi_review_mask.view(batch_size*candi_k, candi_rcount+1))
         candi_scores = candi_scores.view(batch_size, candi_k)
         return candi_scores
-
-    def forward_arr(self, batch_data_arr, train_pv=True):
-        loss = []
-        for batch_data in batch_data_arr:
-            cur_loss = self.forward(batch_data, train_pv)
-            loss.append(cur_loss)
-        return sum(loss) / len(loss)
 
     def forward(self, batch_data, train_pv=True):
         query_word_idxs = batch_data.query_word_idxs
