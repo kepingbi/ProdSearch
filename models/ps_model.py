@@ -72,6 +72,7 @@ class ProductRanker(nn.Module):
         self.review_encoder_name = args.review_encoder_name
         self.fix_emb = args.fix_emb
 
+        padded_review_words = review_words
         if not self.args.do_subsample_mask:
             #otherwise, review_words should be already padded
             padded_review_words = pad(review_words, pad_id=self.word_pad_idx, width=args.review_word_limit)
