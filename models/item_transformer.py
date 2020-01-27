@@ -124,9 +124,11 @@ class ItemTransformerRanker(nn.Module):
         candi_seg_emb = self.seg_embeddings(candi_seg_idxs.long()) #batch_size, candi_k, max_prev_item_count+1, embedding_size
         candi_sequence_emb += candi_seg_emb
 
+        out_pos = -1 if self.args.use_item_pos else 0
         candi_scores = self.transformer_encoder(
                 candi_sequence_emb.view(batch_size*candi_k, prev_item_count+2, -1),
-                candi_item_seq_mask.view(batch_size*candi_k, prev_item_count+2))
+                candi_item_seq_mask.view(batch_size*candi_k, prev_item_count+2),
+                use_pos=self.args.use_pos_emb, out_pos=out_pos)
         candi_scores = candi_scores.view(batch_size, candi_k)
         return candi_scores
 
@@ -218,10 +220,12 @@ class ItemTransformerRanker(nn.Module):
         pos_sequence_emb += pos_seg_emb
         neg_sequence_emb += neg_seg_emb
 
-        pos_scores = self.transformer_encoder(pos_sequence_emb, pos_item_seq_mask, use_pos=self.args.use_pos_emb)
+        out_pos = -1 if self.args.use_item_pos else 0
+        pos_scores = self.transformer_encoder(pos_sequence_emb, pos_item_seq_mask, use_pos=self.args.use_pos_emb, out_pos=out_pos)
+
         neg_scores = self.transformer_encoder(
                 neg_sequence_emb.view(batch_size*neg_k, prev_item_count+2, -1),
-                neg_item_seq_mask.view(batch_size*neg_k, prev_item_count+2), use_pos=self.args.use_pos_emb)
+                neg_item_seq_mask.view(batch_size*neg_k, prev_item_count+2), use_pos=self.args.use_pos_emb, out_pos=out_pos)
         neg_scores = neg_scores.view(batch_size, neg_k)
         pos_weight = 1
         if self.args.pos_weight:

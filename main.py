@@ -44,6 +44,8 @@ def parse_args():
             help="fix word embeddings or review embeddings during training.")
     parser.add_argument("--use_pos_emb", type=str2bool, nargs='?',const=True,default=True,
             help="use positional embeddings when encoding reviews.")
+    parser.add_argument("--use_item_pos", type=str2bool, nargs='?',const=True,default=False,
+            help="use the embeddings corresponding to a candidate item as an output when encoding review sequence.")
     parser.add_argument("--use_item_emb", type=str2bool, nargs='?',const=True,default=False,
             help="use item embeddings when encoding review sequence.")
     parser.add_argument("--use_user_emb", type=str2bool, nargs='?',const=True,default=False,

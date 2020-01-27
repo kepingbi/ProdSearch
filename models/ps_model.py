@@ -232,7 +232,8 @@ class ProductRanker(nn.Module):
 
         candi_scores = self.transformer_encoder(
                 candi_sequence_emb.view(batch_size*candi_k, candi_rcount+1, -1),
-                candi_review_mask.view(batch_size*candi_k, candi_rcount+1))
+                candi_review_mask.view(batch_size*candi_k, candi_rcount+1),
+                use_pos=self.args.use_pos_emb)
         candi_scores = candi_scores.view(batch_size, candi_k)
         return candi_scores
 
