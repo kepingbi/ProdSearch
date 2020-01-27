@@ -68,7 +68,7 @@ class TransformerEncoder(nn.Module):
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
         self.wo = nn.Linear(d_model, 1, bias=True)
 
-    def forward(self, input_vecs, mask, use_pos=True, out_pos=0):
+    def encode(self, input_vecs, mask, use_pos=True):
         """ See :obj:`EncoderBase.forward()`"""
 
         #input_vecs is batch_size, sequence_length, embedding_size
@@ -85,10 +85,16 @@ class TransformerEncoder(nn.Module):
 
         x = self.layer_norm(x)
         #out_pos can be 0 or -1 # represent query or item in the item_transformer model
+        return x
+
+    def forward(self, input_vecs, mask, use_pos=True, out_pos=0):
+        """ See :obj:`EncoderBase.forward()`"""
+
+        #out_pos can be 0 or -1 # represent query or item in the item_transformer model
+        x = self.encode(input_vecs, mask, use_pos)
         out_emb = x[:,out_pos,:]# x[:,0,:] will return size batch_size, d_model
         scores = self.wo(out_emb).squeeze(-1) #* mask.float()
         #batch_size
-
         return scores
 
     def initialize_parameters(self, logger=None):

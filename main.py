@@ -42,6 +42,8 @@ def parse_args():
             help="during test time if only training data is available, use the most recent iprev and uprev reviews; if train_review_only is False, use all the sequential reviews available before current review, including validation and test.")
     parser.add_argument("--fix_emb", type=str2bool, nargs='?',const=True,default=False,
             help="fix word embeddings or review embeddings during training.")
+    parser.add_argument("--use_dot_prod", type=str2bool, nargs='?',const=True,default=False,
+            help="use positional embeddings when encoding reviews.")
     parser.add_argument("--use_pos_emb", type=str2bool, nargs='?',const=True,default=True,
             help="use positional embeddings when encoding reviews.")
     parser.add_argument("--use_item_pos", type=str2bool, nargs='?',const=True,default=False,

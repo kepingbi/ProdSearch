@@ -150,7 +150,6 @@ class ProdSearchDataLoader(DataLoader):
             i_prev_review_idxs = i_seq_train_review_idxs
             if len(i_prev_review_idxs) > self.args.iprev_review_limit:
                 if fix:
-                    #i_prev_review_idxs = i_prev_review_idxs[:self.args.iprev_review_limit]
                     i_prev_review_idxs = i_prev_review_idxs[-self.args.iprev_review_limit:]
                 else:
                     rand_review_set = random.sample(i_seq_train_review_idxs, self.args.iprev_review_limit)
