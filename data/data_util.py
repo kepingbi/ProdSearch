@@ -136,7 +136,7 @@ class ProdSearchData():
         return vocab_distribute
 
     def sub_sampling(self, subsample_threshold):
-        self.sub_sampling_rate = [1.0 for _ in range(self.vocab_size)]
+        self.sub_sampling_rate = np.asarray([1.0 for _ in range(self.vocab_size)])
         if subsample_threshold == 0.0:
             return
         threshold = sum(self.vocab_distribute) * subsample_threshold
