@@ -51,8 +51,8 @@ class ItemTransformerRanker(nn.Module):
             pretrained_weights = load_user_item_embeddings(pretrain_product_emb_path)
             pretrained_weights.append([0.] * len(pretrained_weights[0]))
             self.product_emb = nn.Embedding.from_pretrained(torch.FloatTensor(pretrained_weights), padding_idx=self.prod_pad_idx)
-        #self.product_bias = nn.Parameter(torch.zeros(product_size), requires_grad=True)
         '''
+        self.product_bias = nn.Parameter(torch.zeros(product_size+1), requires_grad=True)
         self.word_bias = nn.Parameter(torch.zeros(vocab_size), requires_grad=True)
 
         if self.pretrain_emb_dir is not None:
@@ -132,7 +132,9 @@ class ItemTransformerRanker(nn.Module):
                 use_pos=self.args.use_pos_emb)
         candi_out_emb = top_vecs[:,out_pos,:]
         candi_scores = torch.bmm(candi_out_emb.unsqueeze(1), candi_item_emb.view(batch_size*candi_k, -1).unsqueeze(2))
+        candi_bias = self.product_bias[candi_prod_idxs.view(-1)].view(batch_size, candi_k)
         candi_scores = candi_scores.view(batch_size, candi_k)
+        candi_scores += candi_bias
         return candi_scores
 
     def test_trans(self, batch_data):
@@ -342,7 +344,6 @@ class ItemTransformerRanker(nn.Module):
         top_vecs = self.transformer_encoder.encode(pos_sequence_emb, pos_item_seq_mask, use_pos=self.args.use_pos_emb)
         pos_out_emb = top_vecs[:,out_pos,:] #batch_size, embedding_size
         pos_scores = torch.bmm(pos_out_emb.unsqueeze(1), target_item_emb.unsqueeze(2)).squeeze()
-
         top_vecs = self.transformer_encoder.encode(
                 #neg_sequence_emb.view(batch_size*neg_k, prev_item_count+2, -1),
                 #neg_item_seq_mask.view(batch_size*neg_k, prev_item_count+2),
@@ -352,6 +353,10 @@ class ItemTransformerRanker(nn.Module):
         neg_out_emb = top_vecs[:,out_pos,:]
         neg_scores = torch.bmm(neg_out_emb.unsqueeze(1), neg_item_emb.view(batch_size*neg_k, -1).unsqueeze(2))
         neg_scores = neg_scores.view(batch_size, neg_k)
+        pos_bias = self.product_bias[target_prod_idxs.view(-1)].view(batch_size)
+        neg_bias = self.product_bias[neg_item_idxs.view(-1)].view(batch_size, neg_k)
+        pos_scores += pos_bias
+        neg_scores += neg_bias
         pos_weight = 1
         if self.args.pos_weight:
             pos_weight = self.args.neg_per_pos
