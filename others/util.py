@@ -27,7 +27,7 @@ def load_user_item_embeddings(fname):
         emb_size = int(fin.readline().strip())
         for line in fin:
             arr = line.strip().split(' ')
-            vector = [float(x) for x in vector]
+            vector = [float(x) for x in arr]
             embeddings.append(vector)
     logger.info("Loading {}".format(fname))
     logger.info("Count:{} Embeddings size:{}".format(len(embeddings), len(embeddings[0])))
