@@ -2,9 +2,11 @@ import sys
 import os
 import argparse
 
+#titanx-long #1080ti-long #2080ti-long   # Partition to submit to
+#SBATCH --mem=96000    # Memory in MB per node allocated
 config_str = """#!/bin/bash
 
-#SBATCH --partition=titanx-long #m40-long #titanx-long #1080ti-long #2080ti-long   # Partition to submit to
+#SBATCH --partition=titanx-long
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks=1
 #SBATCH --mem=64000    # Memory in MB per node allocated
@@ -23,7 +25,8 @@ datasets = ["Beauty",#dataset, divided into how many parts
             ]
 
 WORKING_DIR="/mnt/nfs/scratch1/kbi/review_transformer/working/Amazon"
-OUTPUT_DIR="/mnt/nfs/scratch1/kbi/review_transformer/output/Amazon"
+#OUTPUT_DIR="/mnt/nfs/scratch1/kbi/review_transformer/output/Amazon/review_transformer_nodup"
+OUTPUT_DIR="/mnt/nfs/work1/croft/kbi/review_transformer/output/Amazon/review_transformer_nodup"
 
 script_path = "python main.py"
 #CONST_CMD_ARR = [("data_dir", data_dir),("input_train_dir", input_train_dir)]
@@ -39,17 +42,60 @@ large_pvc_path = "batch_size512.negative_sample5.learning_rate0.5.embed_size128.
 
 para_names = ['pretrain_type', 'review_encoder_name', 'max_train_epoch', 'lr', 'warmup_steps', 'batch_size', 'valid_candi_size', \
         'embedding_size', 'review_word_limit', 'iprev_review_limit', 'dropout', \
-        'use_pos_emb', 'corrupt_rate', 'pos_weight', 'l2_lambda', 'ff_size', 'inter_layers', 'use_user_emb', 'use_item_emb']
+        'use_pos_emb', 'corrupt_rate', 'pos_weight', 'l2_lambda', 'ff_size', \
+        'inter_layers', 'use_user_emb', 'use_item_emb', 'fix_train_review', 'do_subsample_mask', 'subsampling_rate']
 short_names = ['pretrain', 'enc', 'me', 'lr', 'ws', 'bs', 'vcs', 'ebs', \
-                'rwl', 'irl', 'drop', 'upos', 'cr', 'poswt', 'lambda', 'ff', 'ly', 'ue', 'ie']
+                'rwl', 'irl', 'drop', 'upos', 'cr', 'poswt', 'lambda', \
+                'ff', 'ly', 'ue', 'ie', 'ftr','dsm', 'ssr']
 
 paras = [
-        ('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.005, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True),
-        ('Sports_and_Outdoors', 'pv', 'fs', 20, 0.005, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True),
-        ('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 1e-4, 512, 2, True, True),
-        ('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 1e-3, 512, 2, True, True),
-        ('Sports_and_Outdoors', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 1e-4, 512, 2, True, True),
-        ('Sports_and_Outdoors', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 1e-3, 512, 2, True, True),
+        #('Cell_Phones_and_Accessories', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, True, 0), #similar as previous, best setting
+        ('Cell_Phones_and_Accessories', 'pv', 'fs', 20, 0.005, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, True, 0), #similar as previous, best setting
+        ('Cell_Phones_and_Accessories', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 1, False, False, False, True, 0), #similar as previous, best setting
+        ('Cell_Phones_and_Accessories', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 3, False, False, False, True, 0), #similar as previous, best setting
+
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.005, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, True, 0),
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.02, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, True, 0),
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 30, 0.01, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 1, False, False, False, True, 0),
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 30, 0.01, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 3, False, False, False, True, 0),
+
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 30, 0.01, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, True, 0),
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.01, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True, False, True, 0),
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.01, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, True, 0),
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.002, 20000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, True, 0),
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.01, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, False, 1e-5),
+
+        #('Sports_and_Outdoors', 'pv', 'fs', 20, 0.01, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True, False, True, 0),
+        #('Sports_and_Outdoors', 'pv', 'fs', 20, 0.01, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, True, 0),
+        #('Sports_and_Outdoors', 'pv', 'fs', 20, 0.002, 20000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, True, 0),
+        #('Sports_and_Outdoors', 'pv', 'fs', 20, 0.01, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, False, 1e-5),
+
+        #('CDs_and_Vinyl', 'pv', 'fs', 20, 0.01, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, True, 0),
+        #('CDs_and_Vinyl', 'pv', 'fs', 20, 0.002, 80000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True, False, True, 0),
+        #('CDs_and_Vinyl', 'pv', 'fs', 20, 0.002, 80000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, True, 0),
+        #('CDs_and_Vinyl', 'pv', 'fs', 20, 0.002, 80000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, False, 1e-5),
+
+        #('Movies_and_TV', 'pv', 'fs', 20, 0.01, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, True, 0),
+        #('Movies_and_TV', 'pv', 'fs', 20, 0.002, 80000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True, False, True, 0),
+        #('Movies_and_TV', 'pv', 'fs', 20, 0.002, 80000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, True, 0),
+        #('Movies_and_TV', 'pv', 'fs', 20, 0.002, 80000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, False, 1e-5),
+
+        #('Electronics', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, True, 0),
+        #('Electronics', 'pv', 'fs', 20, 0.002, 80000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True, False, True, 0),
+        #('Electronics', 'pv', 'fs', 20, 0.002, 80000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, True, 0),
+        #('Electronics', 'pv', 'fs', 20, 0.002, 80000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, False, False, False, False, 1e-5),
+
+        #('Cell_Phones_and_Accessories', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True, False, True, 0), #similar as previous, best setting
+        #('Cell_Phones_and_Accessories', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True, True, True, 0),
+        #('Cell_Phones_and_Accessories', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True, False, False, 1e-5),
+        #('Cell_Phones_and_Accessories', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True, False, True, 1e-5), #do what we expected previously
+
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.005, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True),
+        #('Sports_and_Outdoors', 'pv', 'fs', 20, 0.005, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 0, 512, 2, True, True),
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 1e-4, 512, 2, True, True),
+        #('Clothing_Shoes_and_Jewelry', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 1e-3, 512, 2, True, True),
+        #('Sports_and_Outdoors', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 1e-4, 512, 2, True, True),
+        #('Sports_and_Outdoors', 'pv', 'fs', 20, 0.01, 8000, 128, 1000, 128, 100, 30, 0.1, True, 0.2, False, 1e-3, 512, 2, True, True),
 
         #('Cell_Phones_and_Accessories', 'pv', 'fs', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, False, 0.2, False, 0, 512, 2, True, True),
         #('Cell_Phones_and_Accessories', 'pvc', 'pvc', 20, 0.002, 8000, 128, 500, 128, 100, 30, 0.1, True, 0.3, False, 0, 512, 2, True, True),
@@ -193,16 +239,18 @@ if __name__ == '__main__':
     fscript = open("run_model.sh", 'w')
     parser = argparse.ArgumentParser()
     #parser.add_argument("--log_dir", type=str, default='exp_log')
+    parser.add_argument("--log_dir", type=str, default='log_review_transformer_nodup')
+    parser.add_argument("--script_dir", type=str, default='script_review_transformer_nodup')
     args = parser.parse_args()
     #os.system("mkdir -p %s" % args.log_dir)
-    os.system("mkdir -p script")
-    os.system("mkdir -p log")
-    job_id = 0
+    os.system("mkdir -p %s" % args.log_dir)
+    os.system("mkdir -p %s" % args.script_dir)
+    job_id = 1
     for para in paras:
         cmd_arr = []
         cmd_arr.append(script_path)
         dataset = para[0]
-        os.system("mkdir -p log/{}".format(dataset))
+        os.system("mkdir -p {}/{}".format(args.log_dir, dataset))
 
         if para[1] == 'pv':
             pretrain_emb_dir = os.path.join(pretrain_pv_root_dir.replace('##', dataset), pv_path)
@@ -226,20 +274,28 @@ if __name__ == '__main__':
         cur_cmd_option = " ".join(["--{} {}".format(x,y) for x,y in zip(para_names[1:], para[2:])])
         cmd_arr.append(cur_cmd_option)
         cmd_arr.append("--save_dir %s" % save_dir)
+        cmd_arr.append("--has_valid False") #use test as validation
         model_name = "{}_{}".format(dataset, model_name)
         #cmd_arr.append("--log_file %s/%s.log" % (args.log_dir, model_name))
         #cmd_arr.append("&> %s/%s.log \n" % (args.log_dir, model_name))
         cmd = " " .join(cmd_arr)
+        cmd_arr.append("--mode test")
+        cmd_arr.append("--train_review_only False")
+        cmd_arr.append("--do_seq_review_test")
+        cmd_arr.append("--rankfname test.seq_all.ranklist")
+        test_cmd = " ".join(cmd_arr)
         #print(cmd)
         #os.system(cmd)
-        fname = "script/%s.sh" % model_name
+        fname = "%s/%s.sh" % (args.script_dir, model_name)
         with open(fname, 'w') as fout:
             fout.write(config_str)
             fout.write("#SBATCH --job-name=%d.sh\n" % job_id)
-            fout.write("#SBATCH --output=log/%s/%s.txt\n" % (dataset, model_name))
-            fout.write("#SBATCH -e log/%s/%s.err.txt\n" % (dataset, model_name))
+            fout.write("#SBATCH --output=%s/%s/%s.txt\n" % (args.log_dir, dataset, model_name))
+            fout.write("#SBATCH -e %s/%s/%s.err.txt\n" % (args.log_dir, dataset, model_name))
             fout.write("\n")
             fout.write(cmd)
+            fout.write("\n")
+            fout.write(test_cmd)
             fout.write("\n\n")
             fout.write("exit\n")
 

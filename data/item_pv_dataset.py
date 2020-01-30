@@ -79,6 +79,7 @@ class ItemPVDataset(Dataset):
         word_idxs = []
         for line_no, user_idx, prod_idx, review_idx in prod_data.review_info:
             cur_review_word_idxs = self.global_data.review_words[review_idx]
+            random.shuffle(cur_review_word_idxs)
             for word_idx in cur_review_word_idxs:
                 if rand_numbers[entry_id] > prod_data.sub_sampling_rate[word_idx]:
                     continue

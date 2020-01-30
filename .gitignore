@@ -2,7 +2,7 @@ __pycache__
 ConvProductSearchNF
 src
 HEM
-*log
+*log*
 *bak*
 *.sh
 *.pyc

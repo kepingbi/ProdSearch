@@ -44,6 +44,7 @@ def parse_args():
             help="fix word embeddings or review embeddings during training.")
     parser.add_argument("--use_dot_prod", type=str2bool, nargs='?',const=True,default=False,
             help="use positional embeddings when encoding reviews.")
+    parser.add_argument("--sim_func", type=str, default="product", choices=["bias_product", "product", "cosine"], help="similarity computation method.")
     parser.add_argument("--use_pos_emb", type=str2bool, nargs='?',const=True,default=True,
             help="use positional embeddings when encoding reviews.")
     parser.add_argument("--use_item_pos", type=str2bool, nargs='?',const=True,default=False,

@@ -132,9 +132,10 @@ class ItemTransformerRanker(nn.Module):
                 use_pos=self.args.use_pos_emb)
         candi_out_emb = top_vecs[:,out_pos,:]
         candi_scores = torch.bmm(candi_out_emb.unsqueeze(1), candi_item_emb.view(batch_size*candi_k, -1).unsqueeze(2))
-        candi_bias = self.product_bias[candi_prod_idxs.view(-1)].view(batch_size, candi_k)
         candi_scores = candi_scores.view(batch_size, candi_k)
-        candi_scores += candi_bias
+        if self.args.sim_func == "bias_product":
+            candi_bias = self.product_bias[candi_prod_idxs.view(-1)].view(batch_size, candi_k)
+            candi_scores += candi_bias
         return candi_scores
 
     def test_trans(self, batch_data):
@@ -203,16 +204,16 @@ class ItemTransformerRanker(nn.Module):
         batch_size, pv_window_size = target_word_idxs.size()
         prod_emb = self.product_emb(target_prod_idxs)
         target_word_emb = self.word_embeddings(target_word_idxs)
-        pos_bias = self.word_bias[target_word_idxs.view(-1)].view(batch_size, pv_window_size, 1)
 
         #for each target word, there is k words negative sampling
         #vocab_size = self.word_embeddings.weight.size() - 1
         #compute the loss of review generating positive and negative words
         neg_sample_idxs = torch.multinomial(self.word_dists, batch_size * pv_window_size * n_negs, replacement=True)
         neg_sample_emb = self.word_embeddings(neg_sample_idxs.view(batch_size,-1))
-        neg_bias = self.word_bias[neg_sample_idxs].view(batch_size, pv_window_size, -1)
         output_pos = torch.bmm(target_word_emb, prod_emb.unsqueeze(2)) # batch_size, pv_window_size, 1
         output_neg = torch.bmm(neg_sample_emb, prod_emb.unsqueeze(2)).view(batch_size, pv_window_size, -1)
+        pos_bias = self.word_bias[target_word_idxs.view(-1)].view(batch_size, pv_window_size, 1)
+        neg_bias = self.word_bias[neg_sample_idxs].view(batch_size, pv_window_size, -1)
         output_pos += pos_bias
         output_neg += neg_bias
 
@@ -353,10 +354,11 @@ class ItemTransformerRanker(nn.Module):
         neg_out_emb = top_vecs[:,out_pos,:]
         neg_scores = torch.bmm(neg_out_emb.unsqueeze(1), neg_item_emb.view(batch_size*neg_k, -1).unsqueeze(2))
         neg_scores = neg_scores.view(batch_size, neg_k)
-        pos_bias = self.product_bias[target_prod_idxs.view(-1)].view(batch_size)
-        neg_bias = self.product_bias[neg_item_idxs.view(-1)].view(batch_size, neg_k)
-        pos_scores += pos_bias
-        neg_scores += neg_bias
+        if self.args.sim_func == "bias_product":
+            pos_bias = self.product_bias[target_prod_idxs.view(-1)].view(batch_size)
+            neg_bias = self.product_bias[neg_item_idxs.view(-1)].view(batch_size, neg_k)
+            pos_scores += pos_bias
+            neg_scores += neg_bias
         pos_weight = 1
         if self.args.pos_weight:
             pos_weight = self.args.neg_per_pos
