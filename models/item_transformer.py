@@ -344,7 +344,7 @@ class ItemTransformerRanker(nn.Module):
         out_pos = -1 if self.args.use_item_pos else 0
         top_vecs = self.transformer_encoder.encode(pos_sequence_emb, pos_item_seq_mask, use_pos=self.args.use_pos_emb)
         pos_out_emb = top_vecs[:,out_pos,:] #batch_size, embedding_size
-        pos_scores = torch.bmm(pos_out_emb.unsqueeze(1), target_item_emb.unsqueeze(2)).squeeze()
+        pos_scores = torch.bmm(pos_out_emb.unsqueeze(1), target_item_emb.unsqueeze(2)).view(batch_size) #in case batch_size=1
         top_vecs = self.transformer_encoder.encode(
                 #neg_sequence_emb.view(batch_size*neg_k, prev_item_count+2, -1),
                 #neg_item_seq_mask.view(batch_size*neg_k, prev_item_count+2),
