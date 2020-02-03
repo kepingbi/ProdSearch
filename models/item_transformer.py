@@ -13,6 +13,7 @@ from models.PV import ParagraphVector
 from models.PVC import ParagraphVectorCorruption
 from models.text_encoder import AVGEncoder, FSEncoder, get_vector_mean
 from models.transformer import TransformerEncoder
+from models.neural import MultiHeadedAttention
 from models.optimizers import Optimizer
 from others.logging import logger
 from others.util import pad, load_pretrain_embeddings, load_user_item_embeddings
@@ -68,10 +69,13 @@ class ItemTransformerRanker(nn.Module):
         else:
             self.word_embeddings = nn.Embedding(
                 vocab_size, self.embedding_size, padding_idx=self.word_pad_idx)
-
-        self.transformer_encoder = TransformerEncoder(
-                self.embedding_size, args.ff_size, args.heads,
-                args.dropout, args.inter_layers)
+        if self.args.model_name == "item_transformer":
+            self.transformer_encoder = TransformerEncoder(
+                    self.embedding_size, args.ff_size, args.heads,
+                    args.dropout, args.inter_layers)
+        #if self.args.model_name == "ZAM" or self.args.model_name == "AEM":
+        else:
+            self.attention_encoder = MultiHeadedAttention(args.heads, self.embedding_size, args.dropout)
 
         if args.query_encoder_name == "fs":
             self.query_encoder = FSEncoder(self.embedding_size, self.emb_dropout)
@@ -96,10 +100,13 @@ class ItemTransformerRanker(nn.Module):
         self.load_state_dict(pt['model'], strict=strict)
 
     def test(self, batch_data):
-        if self.args.use_dot_prod:
-            return self.test_dotproduct(batch_data)
+        if self.args.model_name == "item_transformer":
+            if self.args.use_dot_prod:
+                return self.test_dotproduct(batch_data)
+            else:
+                return self.test_trans(batch_data)
         else:
-            return self.test_trans(batch_data)
+            return self.test_attn(batch_data)
 
     def test_dotproduct(self, batch_data):
         query_word_idxs = batch_data.query_word_idxs
@@ -137,6 +144,52 @@ class ItemTransformerRanker(nn.Module):
             candi_bias = self.product_bias[candi_prod_idxs.view(-1)].view(batch_size, candi_k)
             candi_scores += candi_bias
         return candi_scores
+
+    def test_attn(self, batch_data):
+        query_word_idxs = batch_data.query_word_idxs
+        target_prod_idxs = batch_data.target_prod_idxs
+        u_item_idxs = batch_data.u_item_idxs
+        candi_prod_idxs = batch_data.candi_prod_idxs
+        batch_size, prev_item_count = u_item_idxs.size()
+        _, candi_k = candi_prod_idxs.size()
+        query_word_emb = self.word_embeddings(query_word_idxs)
+        query_emb = self.query_encoder(query_word_emb, query_word_idxs.ne(self.word_pad_idx))
+        embed_size = query_emb.size()[-1]
+        query_emb = query_emb.unsqueeze(1).expand(-1, candi_k, -1).unsqueeze(2).contiguous()
+        u_item_mask = u_item_idxs.ne(self.prod_pad_idx)
+        candi_item_seq_mask = u_item_mask.unsqueeze(1).expand(-1,candi_k,-1)
+        candi_item_emb = self.product_emb(candi_prod_idxs) #batch_size, candi_k, embedding_size
+        if self.args.sep_prod_emb:
+            u_item_emb = self.hist_product_emb(u_item_idxs)
+        else:
+            u_item_emb = self.product_emb(u_item_idxs)
+
+        candi_sequence_emb = u_item_emb.unsqueeze(1).expand(-1, candi_k, -1, -1)
+
+        if self.args.model_name == "ZAM":
+            zero_column = torch.zeros(batch_size, 1, embed_size, device=query_word_idxs.device)
+            column_mask = torch.ones(batch_size, 1, dtype=torch.uint8, device=query_word_idxs.device)
+            column_mask = column_mask.unsqueeze(1).expand(-1,candi_k,-1)
+            candi_item_seq_mask = torch.cat([column_mask, candi_item_seq_mask], dim=2)
+            pos_sequence_emb = torch.cat([zero_column, u_item_emb], dim=1)
+            candi_sequence_emb = torch.cat([zero_column.expand(-1, candi_k, -1).unsqueeze(2),
+                        candi_sequence_emb], dim=2)
+
+        candi_item_seq_mask = candi_item_seq_mask.contiguous().view(batch_size*candi_k, 1, -1)
+        out_pos = 0
+        candi_sequence_emb = candi_sequence_emb.contiguous().view(batch_size*candi_k, -1, embed_size)
+        top_vecs = self.attention_encoder(
+                candi_sequence_emb, candi_sequence_emb, query_emb,
+                mask = 1-candi_item_seq_mask)
+        candi_out_emb = top_vecs[:,out_pos,:]
+        candi_scores = torch.bmm(candi_out_emb.unsqueeze(1), candi_item_emb.view(batch_size*candi_k, -1).unsqueeze(2))
+        candi_scores = candi_scores.view(batch_size, candi_k)
+
+        if self.args.sim_func == "bias_product":
+            candi_bias = self.product_bias[candi_prod_idxs.view(-1)].view(batch_size, candi_k)
+            candi_scores += candi_bias
+        return candi_scores
+
 
     def test_trans(self, batch_data):
         query_word_idxs = batch_data.query_word_idxs
@@ -293,11 +346,88 @@ class ItemTransformerRanker(nn.Module):
         return ps_loss + item_loss
 
     def forward(self, batch_data, train_pv=False):
-        if self.args.use_dot_prod:
-            return self.forward_dotproduct(batch_data)
+        if self.args.model_name == "item_transformer":
+            if self.args.use_dot_prod:
+                return self.forward_dotproduct(batch_data)
+            else:
+                return self.forward_trans(batch_data)
         else:
-            return self.forward_trans(batch_data)
+            return self.forward_attn(batch_data)
 
+    def forward_attn(self, batch_data, train_pv=False):
+        query_word_idxs = batch_data.query_word_idxs
+        target_prod_idxs = batch_data.target_prod_idxs
+        u_item_idxs = batch_data.u_item_idxs
+        batch_size, prev_item_count = u_item_idxs.size()
+        neg_k = self.args.neg_per_pos
+        pos_iword_idxs = batch_data.pos_iword_idxs
+        neg_item_idxs = torch.multinomial(self.prod_dists, batch_size * neg_k, replacement=True)
+        neg_item_idxs = neg_item_idxs.view(batch_size, -1)
+        query_word_emb = self.word_embeddings(query_word_idxs)
+        query_emb = self.query_encoder(query_word_emb, query_word_idxs.ne(self.word_pad_idx))
+        embed_size = query_emb.size()[-1]
+        query_emb = query_emb.unsqueeze(1)
+        u_item_mask = u_item_idxs.ne(self.prod_pad_idx)
+        target_item_emb = self.product_emb(target_prod_idxs)
+        neg_item_emb = self.product_emb(neg_item_idxs) #batch_size, neg_k, embedding_size
+        if self.args.sep_prod_emb:
+            u_item_emb = self.hist_product_emb(u_item_idxs)
+        else:
+            u_item_emb = self.product_emb(u_item_idxs)
+        pos_sequence_emb = u_item_emb
+        neg_sequence_emb = u_item_emb.unsqueeze(1).expand(-1, neg_k, -1, -1)
+        pos_item_seq_mask = u_item_mask
+        neg_item_seq_mask = u_item_mask.unsqueeze(1).expand(-1,neg_k,-1)
+        if self.args.model_name == "ZAM":
+            zero_column = torch.zeros(batch_size, 1, embed_size, device=query_word_idxs.device)
+            column_mask = torch.ones(batch_size, 1, dtype=torch.uint8, device=query_word_idxs.device)
+            pos_item_seq_mask = torch.cat([column_mask, u_item_mask], dim=1) #batch_size, 1+max_review_count
+            column_mask = column_mask.unsqueeze(1).expand(-1,neg_k,-1)
+            neg_item_seq_mask = torch.cat([column_mask, u_item_mask.unsqueeze(1).expand(-1,neg_k,-1)], dim=2)
+            pos_sequence_emb = torch.cat([zero_column, u_item_emb], dim=1)
+            neg_sequence_emb = torch.cat([zero_column.expand(-1, neg_k, -1).unsqueeze(2),
+                        neg_sequence_emb], dim=2)
+
+        pos_item_seq_mask = pos_item_seq_mask.unsqueeze(1)
+        neg_item_seq_mask = neg_item_seq_mask.contiguous().view(batch_size*neg_k, 1, -1)
+        out_pos = 0
+        top_vecs = self.attention_encoder(pos_sequence_emb, pos_sequence_emb, query_emb, mask=1-pos_item_seq_mask)
+        pos_out_emb = top_vecs[:,out_pos,:] #batch_size, embedding_size
+        pos_scores = torch.bmm(pos_out_emb.unsqueeze(1), target_item_emb.unsqueeze(2)).squeeze()
+        neg_sequence_emb = neg_sequence_emb.contiguous().view(batch_size*neg_k, -1, embed_size)
+        query_emb = query_emb.expand(-1, neg_k, -1).unsqueeze(2).contiguous()
+        top_vecs = self.attention_encoder(
+                neg_sequence_emb, neg_sequence_emb, query_emb,
+                mask = 1-neg_item_seq_mask)
+        neg_out_emb = top_vecs[:,out_pos,:]
+        neg_scores = torch.bmm(neg_out_emb.unsqueeze(1), neg_item_emb.view(batch_size*neg_k, -1).unsqueeze(2))
+        neg_scores = neg_scores.view(batch_size, neg_k)
+        if self.args.sim_func == "bias_product":
+            pos_bias = self.product_bias[target_prod_idxs.view(-1)].view(batch_size)
+            neg_bias = self.product_bias[neg_item_idxs.view(-1)].view(batch_size, neg_k)
+            pos_scores += pos_bias
+            neg_scores += neg_bias
+        pos_weight = 1
+        if self.args.pos_weight:
+            pos_weight = self.args.neg_per_pos
+        prod_mask = torch.cat([torch.ones(batch_size, 1, dtype=torch.uint8, device=query_word_idxs.device) * pos_weight,
+                        torch.ones(batch_size, neg_k, dtype=torch.uint8, device=query_word_idxs.device)], dim=-1)
+        prod_scores = torch.cat([pos_scores.unsqueeze(-1), neg_scores], dim=-1)
+        target = torch.cat([torch.ones(batch_size, 1, device=query_word_idxs.device),
+            torch.zeros(batch_size, neg_k, device=query_word_idxs.device)], dim=-1)
+        #ps_loss = self.bce_logits_loss(prod_scores, target, weight=prod_mask.float())
+        #for all positive items, there are neg_k negative items
+        ps_loss = nn.functional.binary_cross_entropy_with_logits(
+                prod_scores, target,
+                weight=prod_mask.float(),
+                reduction='none')
+        ps_loss = ps_loss.sum(-1).mean()
+        item_loss = self.item_to_words(target_prod_idxs, pos_iword_idxs, self.args.neg_per_pos)
+        self.ps_loss += ps_loss.item()
+        self.item_loss += item_loss.item()
+        #logger.info("ps_loss:{} item_loss:{}".format(, item_loss.item()))
+
+        return ps_loss + item_loss
 
     def forward_dotproduct(self, batch_data, train_pv=False):
         query_word_idxs = batch_data.query_word_idxs
@@ -442,7 +572,8 @@ class ItemTransformerRanker(nn.Module):
             nn.init.normal_(self.word_embeddings.weight)
         nn.init.normal_(self.seg_embeddings.weight)
         self.query_encoder.initialize_parameters(logger)
-        self.transformer_encoder.initialize_parameters(logger)
+        if self.args.model_name == "item_transformer":
+            self.transformer_encoder.initialize_parameters(logger)
         if logger:
             logger.info(" ItemTransformerRanker initialization finished.")
 
