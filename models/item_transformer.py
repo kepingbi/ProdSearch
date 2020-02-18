@@ -155,33 +155,37 @@ class ItemTransformerRanker(nn.Module):
         query_word_emb = self.word_embeddings(query_word_idxs)
         query_emb = self.query_encoder(query_word_emb, query_word_idxs.ne(self.word_pad_idx))
         embed_size = query_emb.size()[-1]
-        u_item_mask = u_item_idxs.ne(self.prod_pad_idx)
-        candi_item_seq_mask = u_item_mask.unsqueeze(1).expand(-1,candi_k,-1)
         candi_item_emb = self.product_emb(candi_prod_idxs) #batch_size, candi_k, embedding_size
-        if self.args.sep_prod_emb:
-            u_item_emb = self.hist_product_emb(u_item_idxs)
-        else:
-            u_item_emb = self.product_emb(u_item_idxs)
+        if self.args.model_name == "QEM":
+            candi_out_emb = query_emb.unsqueeze(1).expand(-1, candi_k, -1).contiguous().view(batch_size*candi_k, embed_size)
+        else: #if self.args.model_name == "AEM" or self.args.model_name == "ZAM":
+            u_item_mask = u_item_idxs.ne(self.prod_pad_idx)
+            candi_item_seq_mask = u_item_mask.unsqueeze(1).expand(-1,candi_k,-1)
+            if self.args.sep_prod_emb:
+                u_item_emb = self.hist_product_emb(u_item_idxs)
+            else:
+                u_item_emb = self.product_emb(u_item_idxs)
 
-        candi_sequence_emb = u_item_emb.unsqueeze(1).expand(-1, candi_k, -1, -1)
+            candi_sequence_emb = u_item_emb.unsqueeze(1).expand(-1, candi_k, -1, -1)
 
-        if self.args.model_name == "ZAM":
-            zero_column = torch.zeros(batch_size, 1, embed_size, device=query_word_idxs.device)
-            column_mask = torch.ones(batch_size, 1, dtype=torch.uint8, device=query_word_idxs.device)
-            column_mask = column_mask.unsqueeze(1).expand(-1,candi_k,-1)
-            candi_item_seq_mask = torch.cat([column_mask, candi_item_seq_mask], dim=2)
-            pos_sequence_emb = torch.cat([zero_column, u_item_emb], dim=1)
-            candi_sequence_emb = torch.cat([zero_column.expand(-1, candi_k, -1).unsqueeze(2),
-                        candi_sequence_emb], dim=2)
+            if self.args.model_name == "ZAM":
+                zero_column = torch.zeros(batch_size, 1, embed_size, device=query_word_idxs.device)
+                column_mask = torch.ones(batch_size, 1, dtype=torch.uint8, device=query_word_idxs.device)
+                column_mask = column_mask.unsqueeze(1).expand(-1,candi_k,-1)
+                candi_item_seq_mask = torch.cat([column_mask, candi_item_seq_mask], dim=2)
+                pos_sequence_emb = torch.cat([zero_column, u_item_emb], dim=1)
+                candi_sequence_emb = torch.cat([zero_column.expand(-1, candi_k, -1).unsqueeze(2),
+                            candi_sequence_emb], dim=2)
 
-        candi_item_seq_mask = candi_item_seq_mask.contiguous().view(batch_size*candi_k, 1, -1)
-        out_pos = 0
-        candi_sequence_emb = candi_sequence_emb.contiguous().view(batch_size*candi_k, -1, embed_size)
-        query_emb = query_emb.unsqueeze(1).expand(-1, candi_k, -1).contiguous().view(batch_size*candi_k, 1, embed_size)
-        top_vecs = self.attention_encoder(
-                candi_sequence_emb, candi_sequence_emb, query_emb,
-                mask = 1-candi_item_seq_mask)
-        candi_out_emb = 0.5 * top_vecs[:,out_pos,:] + 0.5 * query_emb.squeeze(1)
+            candi_item_seq_mask = candi_item_seq_mask.contiguous().view(batch_size*candi_k, 1, -1)
+            out_pos = 0
+            candi_sequence_emb = candi_sequence_emb.contiguous().view(batch_size*candi_k, -1, embed_size)
+            query_emb = query_emb.unsqueeze(1).expand(-1, candi_k, -1).contiguous().view(batch_size*candi_k, 1, embed_size)
+            top_vecs = self.attention_encoder(
+                    candi_sequence_emb, candi_sequence_emb, query_emb,
+                    mask = 1-candi_item_seq_mask)
+            candi_out_emb = 0.5 * top_vecs[:,out_pos,:] + 0.5 * query_emb.squeeze(1)
+
         candi_scores = torch.bmm(candi_out_emb.unsqueeze(1), candi_item_emb.view(batch_size*candi_k, -1).unsqueeze(2))
         candi_scores = candi_scores.view(batch_size, candi_k)
 
@@ -366,39 +370,44 @@ class ItemTransformerRanker(nn.Module):
         query_word_emb = self.word_embeddings(query_word_idxs)
         query_emb = self.query_encoder(query_word_emb, query_word_idxs.ne(self.word_pad_idx))
         embed_size = query_emb.size()[-1]
-        u_item_mask = u_item_idxs.ne(self.prod_pad_idx)
         target_item_emb = self.product_emb(target_prod_idxs)
         neg_item_emb = self.product_emb(neg_item_idxs) #batch_size, neg_k, embedding_size
-        if self.args.sep_prod_emb:
-            u_item_emb = self.hist_product_emb(u_item_idxs)
-        else:
-            u_item_emb = self.product_emb(u_item_idxs)
-        pos_sequence_emb = u_item_emb
-        neg_sequence_emb = u_item_emb.unsqueeze(1).expand(-1, neg_k, -1, -1)
-        pos_item_seq_mask = u_item_mask
-        neg_item_seq_mask = u_item_mask.unsqueeze(1).expand(-1,neg_k,-1)
-        if self.args.model_name == "ZAM":
-            zero_column = torch.zeros(batch_size, 1, embed_size, device=query_word_idxs.device)
-            column_mask = torch.ones(batch_size, 1, dtype=torch.uint8, device=query_word_idxs.device)
-            pos_item_seq_mask = torch.cat([column_mask, u_item_mask], dim=1) #batch_size, 1+max_review_count
-            column_mask = column_mask.unsqueeze(1).expand(-1,neg_k,-1)
-            neg_item_seq_mask = torch.cat([column_mask, u_item_mask.unsqueeze(1).expand(-1,neg_k,-1)], dim=2)
-            pos_sequence_emb = torch.cat([zero_column, u_item_emb], dim=1)
-            neg_sequence_emb = torch.cat([zero_column.expand(-1, neg_k, -1).unsqueeze(2),
-                        neg_sequence_emb], dim=2)
+        if self.args.model_name == "QEM":
+            pos_out_emb = query_emb #batch_size, embedding_size
+            neg_out_emb = query_emb.unsqueeze(1).expand(-1, neg_k, -1).contiguous().view(batch_size*neg_k,embed_size)
+        else: #if self.args.model_name == "ZAM" or self.args.model_name == "AEM":
+            u_item_mask = u_item_idxs.ne(self.prod_pad_idx)
+            if self.args.sep_prod_emb:
+                u_item_emb = self.hist_product_emb(u_item_idxs)
+            else:
+                u_item_emb = self.product_emb(u_item_idxs)
+            pos_sequence_emb = u_item_emb
+            neg_sequence_emb = u_item_emb.unsqueeze(1).expand(-1, neg_k, -1, -1)
+            pos_item_seq_mask = u_item_mask
+            neg_item_seq_mask = u_item_mask.unsqueeze(1).expand(-1,neg_k,-1)
+            if self.args.model_name == "ZAM":
+                zero_column = torch.zeros(batch_size, 1, embed_size, device=query_word_idxs.device)
+                column_mask = torch.ones(batch_size, 1, dtype=torch.uint8, device=query_word_idxs.device)
+                pos_item_seq_mask = torch.cat([column_mask, u_item_mask], dim=1) #batch_size, 1+max_review_count
+                column_mask = column_mask.unsqueeze(1).expand(-1,neg_k,-1)
+                neg_item_seq_mask = torch.cat([column_mask, u_item_mask.unsqueeze(1).expand(-1,neg_k,-1)], dim=2)
+                pos_sequence_emb = torch.cat([zero_column, u_item_emb], dim=1)
+                neg_sequence_emb = torch.cat([zero_column.expand(-1, neg_k, -1).unsqueeze(2),
+                            neg_sequence_emb], dim=2)
 
-        pos_item_seq_mask = pos_item_seq_mask.unsqueeze(1)
-        neg_item_seq_mask = neg_item_seq_mask.contiguous().view(batch_size*neg_k, 1, -1)
-        out_pos = 0
-        top_vecs = self.attention_encoder(pos_sequence_emb, pos_sequence_emb, query_emb.unsqueeze(1), mask=1-pos_item_seq_mask)
-        pos_out_emb = 0.5 * top_vecs[:,out_pos,:] + 0.5 * query_emb #batch_size, embedding_size
+            pos_item_seq_mask = pos_item_seq_mask.unsqueeze(1)
+            neg_item_seq_mask = neg_item_seq_mask.contiguous().view(batch_size*neg_k, 1, -1)
+            out_pos = 0
+            top_vecs = self.attention_encoder(pos_sequence_emb, pos_sequence_emb, query_emb.unsqueeze(1), mask=1-pos_item_seq_mask)
+            pos_out_emb = 0.5 * top_vecs[:,out_pos,:] + 0.5 * query_emb #batch_size, embedding_size
+            neg_sequence_emb = neg_sequence_emb.contiguous().view(batch_size*neg_k, -1, embed_size)
+            query_emb = query_emb.unsqueeze(1).expand(-1, neg_k, -1).contiguous().view(batch_size*neg_k,1,embed_size)
+            top_vecs = self.attention_encoder(
+                    neg_sequence_emb, neg_sequence_emb, query_emb,
+                    mask = 1-neg_item_seq_mask)
+            neg_out_emb = 0.5 * top_vecs[:,out_pos,:] + 0.5 * query_emb.squeeze(1)
+
         pos_scores = torch.bmm(pos_out_emb.unsqueeze(1), target_item_emb.unsqueeze(2)).squeeze()
-        neg_sequence_emb = neg_sequence_emb.contiguous().view(batch_size*neg_k, -1, embed_size)
-        query_emb = query_emb.unsqueeze(1).expand(-1, neg_k, -1).contiguous().view(batch_size*neg_k,1,embed_size)
-        top_vecs = self.attention_encoder(
-                neg_sequence_emb, neg_sequence_emb, query_emb,
-                mask = 1-neg_item_seq_mask)
-        neg_out_emb = 0.5 * top_vecs[:,out_pos,:] + 0.5 * query_emb.squeeze(1)
         neg_scores = torch.bmm(neg_out_emb.unsqueeze(1), neg_item_emb.view(batch_size*neg_k, -1).unsqueeze(2))
         neg_scores = neg_scores.view(batch_size, neg_k)
         if self.args.sim_func == "bias_product":
