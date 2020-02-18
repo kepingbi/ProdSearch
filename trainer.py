@@ -134,7 +134,7 @@ class Trainer(object):
                 all_query_idxs, all_user_idxs \
                 = self.get_prod_scores(args, global_data, valid_dataset, dataloader, "Validation", candidate_size)
         sorted_prod_idxs = all_prod_scores.argsort(axis=-1)[:,::-1] #by default axis=-1, along the last axis
-        mrr, prec = self.calc_metrics(all_prod_idxs, sorted_prod_idxs, all_target_idxs, candidate_size)
+        mrr, prec = self.calc_metrics(all_prod_idxs, sorted_prod_idxs, all_target_idxs, candidate_size, cutoff=100)
         return mrr, prec
 
     def test(self, args, global_data, test_prod_data, rankfname="test.best_model.ranklist", cutoff=100):
@@ -150,7 +150,7 @@ class Trainer(object):
                 all_query_idxs, all_user_idxs \
                 = self.get_prod_scores(args, global_data, test_dataset, dataloader, "Test", candidate_size)
         sorted_prod_idxs = all_prod_scores.argsort(axis=-1)[:,::-1] #by default axis=-1, along the last axis
-        mrr, prec = self.calc_metrics(all_prod_idxs, sorted_prod_idxs, all_target_idxs, candidate_size)
+        mrr, prec = self.calc_metrics(all_prod_idxs, sorted_prod_idxs, all_target_idxs, candidate_size, cutoff)
         logger.info("Test: MRR:{} P@1:{}".format(mrr, prec))
         output_path = os.path.join(args.save_dir, rankfname)
         eval_count = all_prod_scores.shape[0]
@@ -168,7 +168,7 @@ class Trainer(object):
                             % (user_id, qidx, product_id, rank+1, score)
                     rank_fout.write(line)
 
-    def calc_metrics(self, all_prod_idxs, sorted_prod_idxs, all_target_idxs, candidate_size):
+    def calc_metrics(self, all_prod_idxs, sorted_prod_idxs, all_target_idxs, candidate_size, cutoff=100):
         eval_count = all_prod_idxs.shape[0]
         mrr, prec = 0, 0
         for i in range(eval_count):
@@ -177,7 +177,8 @@ class Trainer(object):
                 pass
             else:
                 rank = result[0][0] + 1
-                mrr += 1/rank
+                if cutoff < 0 or rank <= cutoff:
+                    mrr += 1/rank
                 if rank == 1:
                     prec +=1
         mrr /= eval_count
