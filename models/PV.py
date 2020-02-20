@@ -25,7 +25,7 @@ class ParagraphVector(nn.Module):
         self.review_pad_idx = review_count-1
         self.pretrain_emb_path = pretrain_emb_path
         if pretrain_emb_path is not None:
-            pretrained_weights = load_pretrain_embeddings(pretrain_emb_path)
+            _, pretrained_weights = load_pretrain_embeddings(pretrain_emb_path)
             pretrained_weights.append([0. for _ in range(self._embedding_size)])
             pretrained_weights = torch.FloatTensor(pretrained_weights)
             self.review_embeddings = nn.Embedding.from_pretrained(pretrained_weights)

@@ -48,8 +48,10 @@ def parse_args():
     parser.add_argument("--sim_func", type=str, default="product", choices=["bias_product", "product", "cosine"], help="similarity computation method.")
     parser.add_argument("--use_pos_emb", type=str2bool, nargs='?',const=True,default=True,
             help="use positional embeddings when encoding reviews.")
+    parser.add_argument("--use_seg_emb", type=str2bool, nargs='?',const=True,default=True,
+            help="use segment embeddings when encoding reviews.")
     parser.add_argument("--use_item_pos", type=str2bool, nargs='?',const=True,default=False,
-            help="use the embeddings corresponding to a candidate item as an output when encoding review sequence.")
+            help="use the embeddings corresponding to a candidate item as an output when encoding the purchased item sequence.")
     parser.add_argument("--use_item_emb", type=str2bool, nargs='?',const=True,default=False,
             help="use item embeddings when encoding review sequence.")
     parser.add_argument("--use_user_emb", type=str2bool, nargs='?',const=True,default=False,

@@ -222,7 +222,8 @@ class ProductRanker(nn.Module):
                 (query_emb.unsqueeze(1).expand(-1, candi_k, -1).unsqueeze(2), candi_review_emb), dim=2)
         #batch_size, candi_k, max_review_count+1, embedding_size
         candi_seg_emb = self.seg_embeddings(candi_seg_idxs) #batch_size, candi_k, max_review_count+1, embedding_size
-        candi_sequence_emb += candi_seg_emb
+        if self.args.use_seg_emb:
+            candi_sequence_emb += candi_seg_emb
         if self.args.use_user_emb:
             candi_seq_user_emb = self.user_emb(candi_seq_user_idxs)
             candi_sequence_emb += candi_seq_user_emb
@@ -318,8 +319,9 @@ class ProductRanker(nn.Module):
                 (query_emb.unsqueeze(1).expand(-1, neg_k, -1).unsqueeze(2), neg_review_emb), dim=2)
         #batch_size, neg_k, max_review_count+1, embedding_size
         neg_seg_emb = self.seg_embeddings(neg_seg_idxs) #batch_size, neg_k, max_review_count+1, embedding_size
-        pos_sequence_emb += pos_seg_emb
-        neg_sequence_emb += neg_seg_emb
+        if self.args.use_seg_emb:
+            pos_sequence_emb += pos_seg_emb
+            neg_sequence_emb += neg_seg_emb
         if self.args.use_item_emb:
             pos_seq_item_emb = self.product_emb(pos_item_idxs)
             neg_seq_item_emb = self.product_emb(neg_item_idxs)
