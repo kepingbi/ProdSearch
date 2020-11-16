@@ -79,11 +79,11 @@ def parse_args():
                             help="The lambda for L2 regularization.")
     parser.add_argument("--batch_size", type=int, default=32,
                             help="Batch size to use during training.")
-    parser.add_argument("--has_valid", type=str2bool, nargs='?',const=True,default=True,
+    parser.add_argument("--has_valid", type=str2bool, nargs='?',const=True, default=False,
             help="whether there is validation set; if not use test as validation.")
     parser.add_argument("--valid_batch_size", type=int, default=24,
                             help="Batch size for validation to use during training.")
-    parser.add_argument("--valid_candi_size", type=int, default=500, #
+    parser.add_argument("--valid_candi_size", type=int, default=500, # can be -1 if you want to evaluate on all the products.
                             help="Random products used for validation. When it is 0 or less, all the products are used.")
     parser.add_argument("--test_candi_size", type=int, default=-1, #
                             help="When it is 0 or less, all the products are used. Otherwise, test_candi_size samples from ranklist will be reranked")
