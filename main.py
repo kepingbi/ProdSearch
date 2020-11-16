@@ -43,7 +43,7 @@ def parse_args():
             help="during test time if only training data is available, use the most recent iprev and uprev reviews; if train_review_only is False, use all the sequential reviews available before current review, including validation and test.")
     parser.add_argument("--fix_emb", type=str2bool, nargs='?',const=True,default=False,
             help="fix word embeddings or review embeddings during training.")
-    parser.add_argument("--use_dot_prod", type=str2bool, nargs='?',const=True,default=False,
+    parser.add_argument("--use_dot_prod", type=str2bool, nargs='?',const=True,default=True,
             help="use positional embeddings when encoding reviews.")
     parser.add_argument("--sim_func", type=str, default="product", choices=["bias_product", "product", "cosine"], help="similarity computation method.")
     parser.add_argument("--use_pos_emb", type=str2bool, nargs='?',const=True,default=True,
@@ -63,8 +63,8 @@ def parse_args():
     parser.add_argument("--lr", default=0.002, type=float) #0.002
     parser.add_argument("--beta1", default= 0.9, type=float)
     parser.add_argument("--beta2", default=0.999, type=float)
-    parser.add_argument("--decay_method", default='noam', type=str) #warmup learning rate then decay
-    parser.add_argument("--warmup_steps", default=3000, type=int) #10000
+    parser.add_argument("--decay_method", default='adam', choices=['noam', 'adam'],type=str) #warmup learning rate then decay
+    parser.add_argument("--warmup_steps", default=8000, type=int) #10000
     parser.add_argument("--max_grad_norm", type=float, default=5.0,
                             help="Clip gradients to this norm.")
     parser.add_argument("--subsampling_rate", type=float, default=1e-5,
@@ -104,16 +104,17 @@ def parse_args():
     parser.add_argument("--heads", default=8, type=int, help="attention heads in transformers")
     parser.add_argument("--inter_layers", default=2, type=int, help="transformer layers")
     parser.add_argument("--review_word_limit", type=int, default=100,
-                            help="the limit of number of words in reviews.")
-    parser.add_argument("--uprev_review_limit", type=int, default=10,
-                            help="the number of users previous reviews used.")
+                            help="the limit of number of words in reviews, for review_transformer.")
+    parser.add_argument("--uprev_review_limit", type=int, default=20,
+                            help="the number of items the user previously purchased in TEM; \
+                                    the number of users previous reviews used in RTM.")
     parser.add_argument("--iprev_review_limit", type=int, default=30,
                             help="the number of item's previous reviews used.")
-    parser.add_argument("--pv_window_size", type=int, default=5, help="Size of context window.")
+    parser.add_argument("--pv_window_size", type=int, default=1, help="Size of context window.")
     parser.add_argument("--corrupt_rate", type=float, default=0.9, help="the corruption rate that is used to represent the paragraph in the corruption module.")
     parser.add_argument("--shuffle_review_words", type=str2bool, nargs='?',const=True,default=True,help="shuffle review words before collecting sliding words.")
     parser.add_argument("--train_review_only", type=str2bool, nargs='?',const=True,default=True,help="whether the representation of negative products need to be learned at each step.")
-    parser.add_argument("--max_train_epoch", type=int, default=5,
+    parser.add_argument("--max_train_epoch", type=int, default=20,
                             help="Limit on the epochs of training (0: no limit).")
     parser.add_argument("--train_pv_epoch", type=int, default=0,
                             help="Limit on the epochs of training pv (0: do not train according to pv loss).")
