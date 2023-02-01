@@ -8,7 +8,7 @@ Download the code and follow the ''Data Preparation'' section in this [link](htt
 Use "python ./utils/AmazonDataset/sequentially_split_train_test_data.py <indexed_data_dir> 0.2 0.3" instead.
 
 ## Train/Test a TEM model [1]
-To train a transformer-based embedding model (TEM), run 
+To train a transformer-based embedding model (TEM) [1], run 
 
 ```
 python main.py --model_name item_transformer \ # TEM
@@ -24,7 +24,8 @@ python main.py --model_name item_transformer \ # TEM
                --inter_layers 1 \ # the number of layers for transformer
                --ff_size 512 --heads 8 # other hyper-parameters that may need tune for training. 
 ```
-If you want to run a review-based transformer (RTM) [2], simply use a different model_name: 
+## Train/Test a RTM model [2]
+If you want to run a review-based transformer model (RTM) [2], simply use a different model_name: 
 ```
 --model_name review_transformer
 ```
