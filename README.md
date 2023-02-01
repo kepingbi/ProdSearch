@@ -7,7 +7,7 @@ For each user, we sort his/her purchased items by time and divide items to train
 Download the code and follow the ''Data Preparation'' section in this [link](https://github.com/QingyaoAi/Explainable-Product-Search-with-a-Dynamic-Relation-Embedding-Model) except for splitting data in 4.3.
 Use "python ./utils/AmazonDataset/sequentially_split_train_test_data.py <indexed_data_dir> 0.2 0.3" instead.
 
-## Train/Test a TEM model
+## Train/Test a TEM model [1]
 To train a transformer-based embedding model (TEM), run 
 
 ```
@@ -24,5 +24,11 @@ python main.py --model_name item_transformer \ # TEM
                --inter_layers 1 \ # the number of layers for transformer
                --ff_size 512 --heads 8 # other hyper-parameters that may need tune for training. 
 ```
+If you want to run a review-based transformer (RTM) [2], simply use a different model_name: 
+```
+--model_name review_transformer
+```
 ## References
 [1] Keping Bi, Qingyao Ai, W. Bruce Croft. A Transformer-based Embedding Model for Personalized Product Search. In Proceedings of SIGIR'20.
+
+[2] Keping Bi, Qingyao Ai, W. Bruce Croft. Learning a Fine-Grained Review-based Transformer Model for Personalized Product Search. In Proceedings of SIGIR'21.
